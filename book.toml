@@ -1,0 +1,9 @@
+[book]
+title = "Building an Image Puller with TypeScript"
+authors = ["rijojohn85"]
+language = "en"
+src = "src"
+description = "A from-scratch, project-based introduction to TypeScript: build oci-pull, a tool that downloads a container image and unpacks it into a folder runc can start."
+
+[output.html]
+default-theme = "light"

@@ -1,0 +1,622 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Set Up the Project - Building an Image Puller with TypeScript</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="A from-scratch, project-based introduction to TypeScript: build oci-pull, a tool that downloads a container image and unpacks it into a folder runc can start.">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="favicon-8114d1fc.png">
+        <link rel="stylesheet" href="css/variables-8adf115d.css">
+        <link rel="stylesheet" href="css/general-e96d0476.css">
+        <link rel="stylesheet" href="css/chrome-d279d366.css">
+        <link rel="stylesheet" href="css/print-9e4910d8.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="fonts/fonts-9644e21d.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="mdbook-highlight-css" href="highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="ayu-highlight-3fdfc3ac.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "searchindex-a144fdc2.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc-b48846b6.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="mdbook-body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="mdbook-sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("mdbook-sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="mdbook-sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="mdbook-page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="mdbook-menu-bar-hover-placeholder"></div>
+                <div id="mdbook-menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="mdbook-sidebar-toggle" class="icon-button" for="mdbook-sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="mdbook-sidebar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></svg></span>
+                        </label>
+                        <button id="mdbook-theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="mdbook-theme-list">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M371.3 367.1c27.3-3.9 51.9-19.4 67.2-42.9L600.2 74.1c12.6-19.5 9.4-45.3-7.6-61.2S549.7-4.4 531.1 9.6L294.4 187.2c-24 18-38.2 46.1-38.4 76.1L371.3 367.1zm-19.6 25.4l-116-104.4C175.9 290.3 128 339.6 128 400c0 3.9 .2 7.8 .6 11.6c1.8 17.5-10.2 36.4-27.8 36.4H96c-17.7 0-32 14.3-32 32s14.3 32 32 32H240c61.9 0 112-50.1 112-112c0-2.5-.1-5-.2-7.5z"/></svg></span>
+                        </button>
+                        <ul id="mdbook-theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-ayu">Ayu</button></li>
+                        </ul>
+                        <button id="mdbook-search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="mdbook-searchbar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352c79.5 0 144-64.5 144-144s-64.5-144-144-144S64 128.5 64 208s64.5 144 144 144z"/></svg></span>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Building an Image Puller with TypeScript</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="mdbook-search-wrapper" class="hidden">
+                    <form id="mdbook-searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="mdbook-searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="mdbook-searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <span class=fa-svg id="fa-spin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M304 48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zm0 416c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM48 304c26.5 0 48-21.5 48-48s-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48zm464-48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM142.9 437c18.7-18.7 18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zm0-294.2c18.7-18.7 18.7-49.1 0-67.9S93.7 56.2 75 75s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zM369.1 437c18.7 18.7 49.1 18.7 67.9 0s18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9z"/></svg></span>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="mdbook-searchresults-outer" class="searchresults-outer hidden">
+                        <div id="mdbook-searchresults-header" class="searchresults-header"></div>
+                        <ul id="mdbook-searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('mdbook-sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('mdbook-sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#mdbook-sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="mdbook-content" class="content">
+                    <main>
+                        <h1 id="chapter-2-set-up-the-project"><a class="header" href="#chapter-2-set-up-the-project">Chapter 2: Set Up the Project</a></h1>
+<p>By the end of this chapter you’ll have a folder that type-checks, runs
+one real test, runs the program itself, and is committed to git. Nothing
+in it pulls an image yet — but every chapter after this one adds code to
+<em>this</em> folder, so it’s worth getting right.</p>
+<p>Everything here was run for real. Versions shown are the ones current
+today (September 2026); if yours are newer, that’s fine — the commands
+are the same.</p>
+<h2 id="what-runs-what"><a class="header" href="#what-runs-what">What runs what</a></h2>
+<p>Three programs are involved, and it helps to keep them apart:</p>
+<ul>
+<li><strong>Node.js</strong> runs JavaScript. It can’t run TypeScript — <em>except</em> that
+recent versions (22.18 and newer) can run a <code>.ts</code> file by quietly
+deleting the type annotations first and running what’s left. We’ll
+use that for the day-to-day “run my program” loop. It’s fast and it
+needs no build step.</li>
+<li><strong><code>tsc</code></strong>, the TypeScript compiler, does the thing Node skips: it
+<em>checks</em> the types. It can also turn <code>.ts</code> into <code>.js</code> for shipping,
+which we’ll do in Chapter 12. Until then we only ever ask it “is this
+program correct?” and never “build it.”</li>
+<li><strong>Vitest</strong> runs tests. Like Node, it strips types and runs the code;
+it does <em>not</em> check them. That surprises everyone once, so this
+chapter makes you see it happen on purpose.</li>
+</ul>
+<p>Check your Node:</p>
+<pre><code>$ node --version
+</code></pre>
+<pre><code>v22.20.0
+</code></pre>
+<p>Anything from 22.18 upward works (24 and 26 too). If you’re older than
+that, install a current one — <code>nvm install 22</code> if you use nvm.</p>
+<h2 id="create-the-project"><a class="header" href="#create-the-project">Create the project</a></h2>
+<p>Make the folder and turn it into an npm package. <code>npm</code> is Node’s package
+manager, the equivalent of <code>go mod</code> plus <code>pip</code> in one tool. It reads and
+writes a file called <code>package.json</code>, which is the project’s <code>go.mod</code>:
+name, dependencies, and the short commands you’ll run.</p>
+<pre><code>$ mkdir oci-pull &amp;&amp; cd oci-pull
+$ npm init -y
+$ npm pkg set type=module
+</code></pre>
+<p><code>npm init -y</code> writes a default <code>package.json</code>. The second command adds
+one line to it, <code>"type": "module"</code>, which tells Node to use the modern
+<code>import</code>/<code>export</code> style for every file in this project. (There’s an
+older style, <code>require()</code>, that you’ll still meet in other people’s code.
+We won’t use it.)</p>
+<p>Now the three development tools:</p>
+<pre><code>$ npm install --save-dev typescript vitest @types/node@22
+</code></pre>
+<p><code>--save-dev</code> means “needed to develop this, not to run it” — like a
+build tool, not a library. <code>@types/node</code> is a package of type
+definitions for Node’s own built-in functions (<code>fs</code>, <code>crypto</code>,
+<code>process</code>…), so that when you call them TypeScript knows what they
+take and return. The <code>@22</code> pins it to the same major version as the
+Node you’re running, so the types describe the functions you actually
+have.</p>
+<p>npm prints a few lines while it works. Two are worth reading: <code>found 0 vulnerabilities</code> means it checked what it installed against its list of
+known security problems, and <code>N packages are looking for funding</code> is
+just a count of packages whose authors accept donations (<code>npm fund</code>
+lists the links). Nothing to do about either.</p>
+<p>You should now have this in <code>package.json</code> (versions may be newer):</p>
+<pre><code class="language-json">"devDependencies": {
+  "@types/node": "^22.20.4",
+  "typescript": "^7.0.2",
+  "vitest": "^5.0.1"
+}
+</code></pre>
+<p>Check the compiler answers:</p>
+<pre><code>$ npx tsc --version
+</code></pre>
+<pre><code>Version 7.0.2
+</code></pre>
+<p><code>npx</code> runs a command from the project’s own installed packages, so
+you’re using <em>this</em> project’s <code>tsc</code>, not some global one. TypeScript 7
+is this year’s rewrite of the compiler in Go — same language, much
+faster. If you see 5.x or 6.x, everything in this book still works; a
+couple of settings below were simply defaults you had to set by hand
+before 7.</p>
+<h2 id="the-compiler-settings-that-matter"><a class="header" href="#the-compiler-settings-that-matter">The compiler settings that matter</a></h2>
+<p>TypeScript’s behaviour is controlled by <code>tsconfig.json</code>. Running
+<code>npx tsc --init</code> writes a long, commented one. We’ll write a shorter one
+by hand instead, so every line is a line you understand.</p>
+<p>Create <code>tsconfig.json</code>:</p>
+<pre><code class="language-json">{
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "module": "nodenext",
+    "target": "es2024",
+    "lib": ["es2024"],
+    "types": ["node"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "erasableSyntaxOnly": true,
+    "rewriteRelativeImportExtensions": true,
+    "moduleDetection": "force",
+    "skipLibCheck": true,
+    "sourceMap": true
+  },
+  "include": ["src"]
+}
+</code></pre>
+<p>Line by line, in groups:</p>
+<p><strong>Where things are.</strong> <code>rootDir</code> is where our source lives; <code>outDir</code> is
+where compiled <code>.js</code> would go (Chapter 12). <code>include</code> tells the compiler
+to look only in <code>src</code>.</p>
+<p><strong>What we’re running on.</strong> <code>module: "nodenext"</code> means “resolve imports
+the way Node does.” <code>target: "es2024"</code> and <code>lib: ["es2024"]</code> mean “the
+JavaScript features of 2024 exist; don’t rewrite them into older forms.”
+Node 22 supports all of them. <code>types: ["node"]</code> pulls in the <code>@types/node</code>
+package we installed.</p>
+<p><strong>Strictness.</strong> <code>strict: true</code> turns on every type check TypeScript has.
+Turning this off is how projects end up with types that lie. It stays
+on. The four lines after it are checks that <code>strict</code> <em>doesn’t</em> include
+but should:</p>
+<ul>
+<li><code>noUncheckedIndexedAccess</code> — <code>argv[0]</code> might not exist, so its type is
+“string <em>or</em> undefined” until you check. You’ll meet this in a moment.</li>
+<li><code>exactOptionalPropertyTypes</code> — a field marked optional can be left
+out, but can’t be set to <code>undefined</code> on purpose. Two different things.</li>
+<li><code>noImplicitReturns</code> — every path through a function that returns
+something must actually return something. Go does this for you; TS
+needs to be asked.</li>
+<li><code>noUnusedLocals</code> / <code>noUnusedParameters</code> — like Go’s “declared and not
+used.” Same reason.</li>
+</ul>
+<p><strong>Keeping TypeScript honest.</strong> These four exist because of the thing
+from the start of the chapter: Node and Vitest run <code>.ts</code> files by
+<em>deleting</em> the types, not by compiling. So the code must be valid
+JavaScript once the types are gone.</p>
+<ul>
+<li><code>verbatimModuleSyntax</code> — an import that’s only used as a type must be
+written <code>import type</code>, so the deleter knows to drop it.</li>
+<li><code>isolatedModules</code> — every file must be understandable on its own.</li>
+<li><code>erasableSyntaxOnly</code> — nearly everything TypeScript adds is a label
+next to a name (<code>n: number</code>), and Node runs a <code>.ts</code> file by turning
+each label into spaces: <code>const n: number = 1</code> becomes
+<code>const n         = 1</code>, which is plain JavaScript that does the same
+thing. A few features aren’t labels, they’re <em>things</em> — <code>enum</code> is
+the main one. Delete <code>enum Color { Red }</code> and the next line’s
+<code>Color.Red</code> refers to nothing. This setting forbids those few
+features, so everything we write can be run by deletion alone. We
+won’t miss them.</li>
+<li><code>rewriteRelativeImportExtensions</code> — when Node runs <code>.ts</code> directly, an
+import must say <code>./main.ts</code> (it has no build step to guess the
+extension). This setting lets you write that, and when Chapter 12
+builds real <code>.js</code>, the compiler rewrites it to <code>./main.js</code>.</li>
+</ul>
+<p><strong>Housekeeping.</strong> <code>moduleDetection: "force"</code> — treat every file as a
+module, never a script. <code>skipLibCheck</code> — don’t re-check the types inside
+<code>node_modules</code>, which saves time and avoids other people’s mistakes
+being your problem. <code>sourceMap</code> — when something crashes, point at the
+<code>.ts</code> line, not the stripped <code>.js</code> line.</p>
+<p>That’s the whole file. You’ll rarely touch it again. (If you’re
+wondering whether this is a made-up list: Node’s own documentation on
+running <code>.ts</code> files recommends the “keeping TypeScript honest” group
+almost word for word.)</p>
+<h2 id="the-first-source-file"><a class="header" href="#the-first-source-file">The first source file</a></h2>
+<p>Create <code>src/main.ts</code>:</p>
+<pre><code class="language-ts">export function usage(): string {
+  return "usage: oci-pull &lt;image&gt; &lt;output-dir&gt;";
+}
+
+export function main(argv: string[]): number {
+  if (argv.length !== 2) {
+    console.error(usage());
+    return 2;
+  }
+  const [image, outputDir] = argv;
+  console.log(`would pull ${image} into ${outputDir}`);
+  return 0;
+}
+</code></pre>
+<p>Almost readable as Go. The differences worth noticing:</p>
+<ul>
+<li>Types go <em>after</em> the name, with a colon: <code>argv: string[]</code>, and the
+return type after the parameter list: <code>: number</code>. Same order as Go,
+different punctuation.</li>
+<li><code>export</code> in front of a name makes it visible to other files — the job
+a capital letter does in Go.</li>
+<li><code>const [image, outputDir] = argv;</code> pulls the first two elements out of
+the array into two names. Handy, and note that because of
+<code>noUncheckedIndexedAccess</code> both are typed “string or undefined” —
+TypeScript can’t prove the array has two elements even though we
+checked <code>length</code> the line before. Inside a template string that’s
+fine; the moment we try to <em>use</em> one as a string, the compiler will
+make us check. Chapter 3 hits that for real.</li>
+<li>Backtick strings with <code>${...}</code> inside are TypeScript’s <code>fmt.Sprintf</code>
+/ f-strings.</li>
+<li><code>main</code> returns an exit code instead of calling <code>process.exit()</code>
+itself. That’s deliberate, and it’s the first design choice in the
+book worth naming: <strong>a function that returns a value is easy to
+test; a function that ends the process is not.</strong> We’ll keep that rule
+everywhere.</li>
+</ul>
+<p>Now a second file, <code>src/cli.ts</code>, which is the <em>only</em> file that does
+something when it runs:</p>
+<pre><code class="language-ts">import { main } from "./main.ts";
+
+process.exitCode = main(process.argv.slice(2));
+</code></pre>
+<p><code>process.argv</code> is <code>os.Args</code>: the first two entries are <code>node</code> and the
+script, so <code>.slice(2)</code> drops them. Setting <code>process.exitCode</code> lets Node
+finish normally and then exit with that number.</p>
+<p>A note on <code>"./main.ts"</code>, since Go programmers will find it odd: Node
+imports between your own files are <em>relative</em> — <code>./</code> for this folder,
+<code>../</code> for the parent — and that’s what nearly every Node project does.
+Absolute-style imports (<code>#src/main</code>) are possible, but need a mapping
+in <code>package.json</code> that Node, <code>tsc</code>, and Vitest must each be told about
+and that has to switch between <code>.ts</code> in development and <code>.js</code> after a
+build. Four config knobs for one convenience. This project keeps a
+flat <code>src/</code> where every import is <code>./something.ts</code>, so relative costs
+nothing.</p>
+<p>Why two files? Because in a moment a test is going to <code>import</code> from
+<code>main.ts</code>, and importing a file must never <em>run the program</em>. If
+<code>main.ts</code> ended with <code>main(process.argv...)</code>, every test that imported
+it would try to pull an image. So: <code>main.ts</code> defines things and does
+nothing on its own; <code>cli.ts</code> is the two lines that kick it off. One
+file, one job. This is the single-responsibility idea in its plainest
+form, and it shows up again in Chapter 10 when <code>cli.ts</code> becomes the one
+place where all the pieces get wired together.</p>
+<p>Run it, straight from Node, no build:</p>
+<pre><code>$ node src/cli.ts
+</code></pre>
+<pre><code>usage: oci-pull &lt;image&gt; &lt;output-dir&gt;
+</code></pre>
+<pre><code>$ node src/cli.ts alpine:3.20 ./rootfs
+</code></pre>
+<pre><code>would pull alpine:3.20 into ./rootfs
+</code></pre>
+<h2 id="the-first-test"><a class="header" href="#the-first-test">The first test</a></h2>
+<p>Vitest looks for files ending in <code>.test.ts</code>. We’ll keep each test file
+next to the file it tests. Create <code>src/main.test.ts</code>:</p>
+<pre><code class="language-ts">import { describe, expect, it } from "vitest";
+import { usage } from "./main.ts";
+
+describe("usage", () =&gt; {
+  it("names the program and both arguments", () =&gt; {
+    expect(usage()).toContain("oci-pull");
+    expect(usage()).toContain("&lt;image&gt;");
+    expect(usage()).toContain("&lt;output-dir&gt;");
+  });
+});
+</code></pre>
+<p>Reading it: <code>describe</code> groups tests under a name; <code>it</code> is one test,
+named as a sentence; <code>expect(x).toContain(y)</code> is the assertion. The
+<code>() =&gt; { ... }</code> is how you write a function without a name — Go’s
+<code>func() { ... }</code>, Python’s <code>lambda</code> but allowed to have a body.</p>
+<p>Tell npm how to run things. Add a <code>scripts</code> section to <code>package.json</code>
+(npm has a command for it, so you don’t have to edit JSON by hand):</p>
+<pre><code>$ npm pkg set scripts.start="node src/cli.ts" \
+    scripts.typecheck="tsc --noEmit" \
+    scripts.test="vitest run" \
+    scripts.check="npm run typecheck &amp;&amp; npm run test"
+</code></pre>
+<p><code>tsc --noEmit</code> means “check the types, don’t write any <code>.js</code>.”
+<code>vitest run</code> runs the tests once and exits (plain <code>vitest</code> stays open
+and re-runs on every save, which is nice while working). <code>check</code> is the
+one you’ll run at the end of every chapter.</p>
+<pre><code>$ npm run check
+</code></pre>
+<pre><code>&gt; typecheck
+&gt; tsc --noEmit
+
+&gt; test
+&gt; vitest run
+
+ RUN  v5.0.1 /home/you/oci-pull
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  14:14:34
+   Duration  352ms
+</code></pre>
+<p>(Trimmed slightly; yours will show a few more lines.)</p>
+<h2 id="why-check-runs-two-things"><a class="header" href="#why-check-runs-two-things">Why <code>check</code> runs two things</a></h2>
+<p>Here’s the surprise promised at the top of the chapter. Add a second
+test file, <code>src/oops.test.ts</code>, with a deliberate type error in it:</p>
+<pre><code class="language-ts">import { expect, it } from "vitest";
+import { usage } from "./main.ts";
+
+it("types vanish at run time", () =&gt; {
+  const n: number = usage();
+  expect(n).toContain("oci-pull");
+});
+</code></pre>
+<p><code>usage()</code> returns a string. We’ve declared <code>n</code> as a number. That’s
+wrong. Run only the tests:</p>
+<pre><code>$ npm test
+</code></pre>
+<pre><code> Test Files  2 passed (2)
+      Tests  2 passed (2)
+</code></pre>
+<p><strong>Both pass.</strong> Vitest deleted the <code>: number</code>, ran what was left — which
+is perfectly good JavaScript — and the string did contain <code>oci-pull</code>.
+The type was a lie and nothing noticed.</p>
+<p>Now the compiler:</p>
+<pre><code>$ npm run typecheck
+</code></pre>
+<pre><code>src/oops.test.ts(5,9): error TS2322: Type 'string' is not assignable to type 'number'.
+</code></pre>
+<p><em>That’s</em> where types get checked, and <em>only</em> there. This is the most
+important fact about TypeScript and it’s worth saying plainly: <strong>types
+exist while you write and check the code; they are gone when it runs.</strong>
+A green test run tells you the code does what the tests ask. Only <code>tsc</code>
+tells you the types are true. So <code>check</code> runs both, and neither one
+alone is enough. Chapter 6 will make this concrete in a nastier way:
+JSON that arrives from a server has <em>no</em> types at all, no matter what
+you declared.</p>
+<p>Delete <code>src/oops.test.ts</code> — it did its job.</p>
+<p>One more thing <code>tsc</code> will refuse, so you’ve seen it once: an <code>enum</code>.</p>
+<pre><code>$ printf 'enum Color { Red }\nexport const c = Color.Red;\n' &gt; src/e.ts
+$ npm run typecheck
+</code></pre>
+<pre><code>src/e.ts(1,6): error TS1294: This syntax is not allowed when 'erasableSyntaxOnly' is enabled.
+</code></pre>
+<p>That’s <code>erasableSyntaxOnly</code> doing what we asked. Delete <code>src/e.ts</code>.
+When we need “one of a fixed set of values” later, we’ll use a union of
+strings (<code>"amd64" | "arm64"</code>), which is both erasable and nicer.</p>
+<h2 id="commit"><a class="header" href="#commit">Commit</a></h2>
+<pre><code>$ printf 'node_modules/\ndist/\n' &gt; .gitignore
+$ git init
+$ git add -A
+$ git commit -m "Set up the project"
+</code></pre>
+<p><code>node_modules/</code> is where npm puts installed packages — large, and
+rebuilt with a single <code>npm install</code>, so it’s never committed. <code>dist/</code>
+is where Chapter 12’s build output will go.</p>
+<p><code>package-lock.json</code>, on the other hand, <em>is</em> committed. <code>package.json</code>
+says what you asked for — <code>"typescript": "^7.0.2"</code>, where <code>^</code> means
+“7.0.2 or any newer 7.x.” The lock file says what you actually got: the
+exact version, download address, and checksum of every one of the 41
+packages that landed in <code>node_modules</code> (your three, plus everything
+they depend on). With it, anyone who runs <code>npm install</code> next week gets
+the same 41 packages you have today, not whatever is newest. It’s
+<code>go.sum</code> to <code>package.json</code>’s <code>go.mod</code>. Never edit it by hand; npm
+updates it whenever you add or upgrade something.</p>
+<p>Your tree should be:</p>
+<pre><code>oci-pull/
+├── .gitignore
+├── package.json
+├── package-lock.json
+├── tsconfig.json
+└── src/
+    ├── cli.ts
+    ├── main.ts
+    └── main.test.ts
+</code></pre>
+<h2 id="what-you-should-now-be-able-to-answer"><a class="header" href="#what-you-should-now-be-able-to-answer">What you should now be able to answer</a></h2>
+<ul>
+<li>Which of Node, <code>tsc</code>, and Vitest checks types? Which ones run code?</li>
+<li>Why does <code>npm run check</code> have to run two commands?</li>
+<li>What does <code>"type": "module"</code> in <code>package.json</code> change?</li>
+<li>Why do imports in this project end in <code>.ts</code>, and what setting allows
+that?</li>
+<li>Why is <code>cli.ts</code> a separate file from <code>main.ts</code>?</li>
+<li>Why does <code>main</code> return a number instead of calling <code>process.exit</code>?</li>
+<li>What does <code>--save-dev</code> mean, and why pin <code>@types/node</code> to <code>22</code>?</li>
+</ul>
+<h2 id="next-chapter"><a class="header" href="#next-chapter">Next chapter</a></h2>
+<p>Chapter 2.5 is a short primer, slower on purpose, for readers coming
+from Go and Python: how TypeScript’s idea of a type differs from both
+(a type is a <em>shape</em>, not a name), what <code>unknown</code> is for and why <code>any</code>
+is a trap, how “one of these” types replace enums and Go’s interface
+tricks, what <code>null</code> and <code>undefined</code> each mean, and how <code>async</code>/<code>await</code>
+lines up against goroutines and <code>asyncio</code>. No new code in the project;
+just the ideas Chapter 3 assumes.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="01-why-build-an-image-puller.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                            </a>
+
+                            <a rel="next prefetch" href="02.5-typescript-primer.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="01-why-build-an-image-puller.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                    </a>
+
+                    <a rel="next prefetch" href="02.5-typescript-primer.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                    </a>
+            </nav>
+
+        </div>
+
+        <template id=fa-eye><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM432 256c0 79.5-64.5 144-144 144s-144-64.5-144-144s64.5-144 144-144s144 64.5 144 144zM288 192c0 35.3-28.7 64-64 64c-11.5 0-22.3-3-31.6-8.4c-.2 2.8-.4 5.5-.4 8.4c0 53 43 96 96 96s96-43 96-96s-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6z"/></svg></span></template>
+        <template id=fa-eye-slash><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M38.8 5.1C28.4-3.1 13.3-1.2 5.1 9.2S-1.2 34.7 9.2 42.9l592 464c10.4 8.2 25.5 6.3 33.7-4.1s6.3-25.5-4.1-33.7L525.6 386.7c39.6-40.6 66.4-86.1 79.9-118.4c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C465.5 68.8 400.8 32 320 32c-68.2 0-125 26.3-169.3 60.8L38.8 5.1zM223.1 149.5C248.6 126.2 282.7 112 320 112c79.5 0 144 64.5 144 144c0 24.9-6.3 48.3-17.4 68.7L408 294.5c5.2-11.8 8-24.8 8-38.5c0-53-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6c0 10.2-2.4 19.8-6.6 28.3l-90.3-70.8zm223.1 298L373 389.9c-16.4 6.5-34.3 10.1-53 10.1c-79.5 0-144-64.5-144-144c0-6.9 .5-13.6 1.4-20.2L83.1 161.5C60.3 191.2 44 220.8 34.5 243.7c-3.3 7.9-3.3 16.7 0 24.6c14.9 35.7 46.2 87.7 93 131.1C174.5 443.2 239.2 480 320 480c47.8 0 89.9-12.9 126.2-32.5z"/></svg></span></template>
+        <template id=fa-copy><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M502.6 70.63l-61.25-61.25C435.4 3.371 427.2 0 418.7 0H255.1c-35.35 0-64 28.66-64 64l.0195 256C192 355.4 220.7 384 256 384h192c35.2 0 64-28.8 64-64V93.25C512 84.77 508.6 76.63 502.6 70.63zM464 320c0 8.836-7.164 16-16 16H255.1c-8.838 0-16-7.164-16-16L239.1 64.13c0-8.836 7.164-16 16-16h128L384 96c0 17.67 14.33 32 32 32h47.1V320zM272 448c0 8.836-7.164 16-16 16H63.1c-8.838 0-16-7.164-16-16L47.98 192.1c0-8.836 7.164-16 16-16H160V128H63.99c-35.35 0-64 28.65-64 64l.0098 256C.002 483.3 28.66 512 64 512h192c35.2 0 64-28.8 64-64v-32h-47.1L272 448z"/></svg></span></template>
+        <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
+        <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr-ef4e11c1.min.js"></script>
+        <script src="mark-09e88c2c.min.js"></script>
+        <script src="searcher-09f2665d.js"></script>
+
+        <script src="clipboard-1626706a.min.js"></script>
+        <script src="highlight-abc7f01d.js"></script>
+        <script src="book-609e4cb8.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>

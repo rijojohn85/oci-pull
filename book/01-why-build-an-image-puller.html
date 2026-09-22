@@ -1,0 +1,602 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Why Build an Image Puller - Building an Image Puller with TypeScript</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="A from-scratch, project-based introduction to TypeScript: build oci-pull, a tool that downloads a container image and unpacks it into a folder runc can start.">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="favicon-8114d1fc.png">
+        <link rel="stylesheet" href="css/variables-8adf115d.css">
+        <link rel="stylesheet" href="css/general-e96d0476.css">
+        <link rel="stylesheet" href="css/chrome-d279d366.css">
+        <link rel="stylesheet" href="css/print-9e4910d8.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="fonts/fonts-9644e21d.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="mdbook-highlight-css" href="highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="ayu-highlight-3fdfc3ac.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "searchindex-a144fdc2.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc-b48846b6.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="mdbook-body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="mdbook-sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("mdbook-sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="mdbook-sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="mdbook-page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="mdbook-menu-bar-hover-placeholder"></div>
+                <div id="mdbook-menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="mdbook-sidebar-toggle" class="icon-button" for="mdbook-sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="mdbook-sidebar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></svg></span>
+                        </label>
+                        <button id="mdbook-theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="mdbook-theme-list">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M371.3 367.1c27.3-3.9 51.9-19.4 67.2-42.9L600.2 74.1c12.6-19.5 9.4-45.3-7.6-61.2S549.7-4.4 531.1 9.6L294.4 187.2c-24 18-38.2 46.1-38.4 76.1L371.3 367.1zm-19.6 25.4l-116-104.4C175.9 290.3 128 339.6 128 400c0 3.9 .2 7.8 .6 11.6c1.8 17.5-10.2 36.4-27.8 36.4H96c-17.7 0-32 14.3-32 32s14.3 32 32 32H240c61.9 0 112-50.1 112-112c0-2.5-.1-5-.2-7.5z"/></svg></span>
+                        </button>
+                        <ul id="mdbook-theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-ayu">Ayu</button></li>
+                        </ul>
+                        <button id="mdbook-search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="mdbook-searchbar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352c79.5 0 144-64.5 144-144s-64.5-144-144-144S64 128.5 64 208s64.5 144 144 144z"/></svg></span>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Building an Image Puller with TypeScript</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="mdbook-search-wrapper" class="hidden">
+                    <form id="mdbook-searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="mdbook-searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="mdbook-searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <span class=fa-svg id="fa-spin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M304 48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zm0 416c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM48 304c26.5 0 48-21.5 48-48s-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48zm464-48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM142.9 437c18.7-18.7 18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zm0-294.2c18.7-18.7 18.7-49.1 0-67.9S93.7 56.2 75 75s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zM369.1 437c18.7 18.7 49.1 18.7 67.9 0s18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9z"/></svg></span>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="mdbook-searchresults-outer" class="searchresults-outer hidden">
+                        <div id="mdbook-searchresults-header" class="searchresults-header"></div>
+                        <ul id="mdbook-searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('mdbook-sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('mdbook-sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#mdbook-sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="mdbook-content" class="content">
+                    <main>
+                        <h1 id="chapter-1-why-build-an-image-puller"><a class="header" href="#chapter-1-why-build-an-image-puller">Chapter 1: Why Build an Image Puller</a></h1>
+<h2 id="start-with-something-you-already-know"><a class="header" href="#start-with-something-you-already-know">Start with something you already know</a></h2>
+<p>You’ve typed this many times:</p>
+<pre><code>$ docker pull alpine:3.20
+</code></pre>
+<p>and seen something like this:</p>
+<pre><code>3.20: Pulling from library/alpine
+25f1d6b1951a: Pulling fs layer
+25f1d6b1951a: Download complete
+25f1d6b1951a: Pull complete
+Digest: sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
+Status: Downloaded newer image for alpine:3.20
+docker.io/library/alpine:3.20
+</code></pre>
+<p>Seven lines, about a second. What actually happened? Docker had a short
+conversation with a server, downloaded a few files, and put them in a
+folder. That’s it. There is no magic in that second — just HTTP, a
+checksum, and <code>tar</code>. By the end of this book you’ll have written a tool
+that does the same thing, and you’ll have learned TypeScript on the way.</p>
+<p>This chapter has no TypeScript in it. It’s here so that when we start
+writing code in Chapter 3, you already know exactly what the code is
+<em>for</em>. Everything below is real: every command is one you can run from
+your own terminal right now, and every output shown was captured from a
+real run, not typed by hand. (Digests and version numbers will drift as
+Alpine ships updates — the <em>shape</em> of each reply is what matters.)</p>
+<h2 id="where-docker-went"><a class="header" href="#where-docker-went">Where Docker went</a></h2>
+<p>Look at the last line of that output again:</p>
+<pre><code>docker.io/library/alpine:3.20
+</code></pre>
+<p>You typed <code>alpine:3.20</code>. Docker filled in the rest. <code>docker.io</code> is the
+server it talked to (the address is really <code>registry-1.docker.io</code> —
+Docker Hub). <code>library/</code> is the folder on that server where the official
+images live. <code>alpine</code> is the image name, and <code>3.20</code> is the tag — a
+human-readable label that points at one specific version. Filling in
+those blanks is the very first thing our tool will do, in Chapter 3.</p>
+<p>A server that stores and hands out images is called a <strong>registry</strong>. That
+word will come up a lot. Docker Hub is one registry; GitHub has one
+(<code>ghcr.io</code>), the cloud providers each have one, and you can run your own.
+They all speak the same protocol, which is why one tool can pull from
+any of them.</p>
+<h2 id="two-things-to-know-before-we-start"><a class="header" href="#two-things-to-know-before-we-start">Two things to know before we start</a></h2>
+<p><strong>Headers.</strong> Every HTTP reply has two parts: the <em>body</em> (the actual
+content — a JSON file, a download) and a few short labels stuck on the
+front that describe the body. Those labels are called <strong>headers</strong>. Think
+of a parcel: the goods inside, and the sticker on the box saying what’s
+inside and how big it is. Requests can carry headers too — that’s how
+a client says “here’s my pass” or “here are the formats I understand.”
+When we use <code>curl</code> below, <code>-D headers.txt</code> saves the headers to one file
+and <code>-o body.json</code> saves the body to another, so we can look at each.</p>
+<p><strong>Digests.</strong> A <strong>digest</strong> is a fingerprint of a file: run every byte
+through a hashing function (SHA-256 here) and you get a fixed-size
+number, written like <code>sha256:d9e853e8...</code>. Change one byte of the file
+and the fingerprint changes completely. Two files with the same digest
+are the same file. Registries use digests as <em>names</em>: you ask for a file
+by its fingerprint, and when it arrives you compute the fingerprint
+yourself and check it matches. If it doesn’t, something was corrupted or
+tampered with, and you throw it away.</p>
+<p>That’s all the vocabulary Step 3 needs. Everything else is introduced
+as it comes up.</p>
+<h2 id="the-conversation-step-by-step"><a class="header" href="#the-conversation-step-by-step">The conversation, step by step</a></h2>
+<p>Docker had four short exchanges with the registry. Let’s have them
+ourselves, with <code>curl</code>, so nothing is hidden.</p>
+<h3 id="step-1-ask-get-told-no-get-told-where-to-ask"><a class="header" href="#step-1-ask-get-told-no-get-told-where-to-ask">Step 1: Ask, get told “no”, get told where to ask</a></h3>
+<p>The registry’s front door is <code>/v2/</code>. Knock on it:</p>
+<pre><code>$ curl -si https://registry-1.docker.io/v2/ | head -12
+</code></pre>
+<p>You should see:</p>
+<pre><code>HTTP/2 401
+date: Tue, 22 Sep 2026 08:01:13 GMT
+content-type: application/json
+content-length: 87
+docker-distribution-api-version: registry/2.0
+www-authenticate: Bearer realm="https://auth.docker.io/token",service="registry.docker.io"
+strict-transport-security: max-age=31536000
+
+{"errors":[{"code":"UNAUTHORIZED","message":"authentication required","detail":null}]}
+</code></pre>
+<p><code>401</code> means “you haven’t proven who you are.” Even for a public image,
+Docker Hub wants you to hold a <strong>token</strong> — a short-lived pass, good for
+five minutes, that says “this client is allowed to read this image.” The
+interesting line is <code>www-authenticate</code>. It’s the registry telling you
+<em>where to go get that pass</em>: the <code>realm</code> is the address, and <code>service</code> is
+a value you must hand back when you ask. Our tool will read this line,
+pull those two values out, and go ask. That’s Chapter 5.</p>
+<h3 id="step-2-get-the-token"><a class="header" href="#step-2-get-the-token">Step 2: Get the token</a></h3>
+<p>Ask the address from the <code>realm</code>, hand back the <code>service</code>, and say which
+image you want to read (<code>scope=repository:library/alpine:pull</code>):</p>
+<pre><code>$ curl -s "https://auth.docker.io/token?service=registry.docker.io&amp;scope=repository:library/alpine:pull" | jq '{token: (.token[0:40] + "..."), expires_in, issued_at}'
+</code></pre>
+<p>You should see:</p>
+<pre><code>{
+  "token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsIng1...",
+  "expires_in": 300,
+  "issued_at": "2026-09-22T08:01:13.82153508Z"
+}
+</code></pre>
+<p>(The real token is about a thousand characters long; it’s cut short
+here.) Save it in a shell variable so the next steps can use it:</p>
+<pre><code>$ TOKEN=$(curl -s "https://auth.docker.io/token?service=registry.docker.io&amp;scope=repository:library/alpine:pull" | jq -r .token)
+</code></pre>
+<p>No username, no password — for a public image the registry hands the
+pass to anyone who asks. Private images need a login step before this;
+that’s one of the things this book leaves out, and Chapter 5 is built so
+that adding it later doesn’t mean rewriting anything.</p>
+<h3 id="step-3-ask-for-the-list-of-parts"><a class="header" href="#step-3-ask-for-the-list-of-parts">Step 3: Ask for the list of parts</a></h3>
+<p>An image isn’t one file. It’s a small JSON document that <em>lists</em> the
+files, plus the files themselves. That JSON document is called the
+<strong>manifest</strong>. Ask for it by image name and tag. The request carries two
+headers of our own: <code>Authorization</code> (“here’s my pass”) and <code>Accept</code>
+(“these are the formats I understand — send one of those”):</p>
+<pre><code>$ curl -s -H "Authorization: Bearer $TOKEN" \
+    -H "Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json" \
+    https://registry-1.docker.io/v2/library/alpine/manifests/3.20 \
+    -D headers.txt -o index.json
+</code></pre>
+<p>That saved the reply’s headers to <code>headers.txt</code> and its body to
+<code>index.json</code>. Look at two of the headers first:</p>
+<pre><code>$ grep -i -E "content-type|docker-content-digest" headers.txt
+</code></pre>
+<p>You should see:</p>
+<pre><code>content-type: application/vnd.oci.image.index.v1+json
+docker-content-digest: sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
+</code></pre>
+<p><code>content-type</code> is the “what’s in the box” sticker. The value is long,
+but read it from the right: it’s <code>json</code>, version <code>1</code>, and the kind of
+thing is <code>image.index</code>. So the registry sent us an <strong>index</strong>, not a
+manifest. (Had it sent a manifest, this would say <code>image.manifest</code>
+instead — and this header is the only reliable way to tell which one
+you got.)</p>
+<p><code>docker-content-digest</code> is the fingerprint of the body. Check it:</p>
+<pre><code>$ sha256sum index.json
+</code></pre>
+<pre><code>d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc  index.json
+</code></pre>
+<p>Same number. And it’s <em>exactly</em> the <code>Digest:</code> line <code>docker pull</code>
+printed at the start of the chapter — that line was the fingerprint of
+this file.</p>
+<p>So why an index and not a manifest? Look at what came back:</p>
+<pre><code>$ jq '{mediaType, manifests: [.manifests[] | {digest: .digest[0:26], platform: (.platform.os+"/"+.platform.architecture)}]}' index.json
+</code></pre>
+<pre><code>{
+  "mediaType": "application/vnd.oci.image.index.v1+json",
+  "manifests": [
+    { "digest": "sha256:c64c687cbea9300178b", "platform": "linux/amd64" },
+    { "digest": "sha256:37753b2965043543542", "platform": "linux/arm" },
+    { "digest": "sha256:bd05c4d38cbeb5cfb34", "platform": "linux/arm" },
+    { "digest": "sha256:45e09956dc667c5eff3", "platform": "linux/arm64" },
+    { "digest": "sha256:4ec3ead63e75e791660", "platform": "linux/386" },
+    { "digest": "sha256:80529c2d621d6271966", "platform": "linux/ppc64le" },
+    { "digest": "sha256:c47cbcc0d9c7f68d8e1", "platform": "linux/riscv64" },
+    { "digest": "sha256:856b20bf4946b5c8f43", "platform": "linux/s390x" }
+  ]
+}
+</code></pre>
+<p>(Trimmed with <code>jq</code> for the page; your file has more fields.) <code>alpine:3.20</code>
+isn’t one image — it’s eight, one per kind of CPU.</p>
+<p>Here’s the difference between the two JSON files, since it matters for
+the rest of the book:</p>
+<ul>
+<li>A <strong>manifest</strong> is the parts list for <em>one</em> image on <em>one</em> kind of
+computer: “here is the config file, and here are the layers, in
+order.” Follow it and you can build the folder.</li>
+<li>An <strong>index</strong> is a list of <em>manifests</em>, one per kind of computer: “if
+you’re linux/amd64 use manifest X; if you’re linux/arm64 use manifest
+Y.” It lists no layers itself. It only points.</li>
+</ul>
+<pre><code>alpine:3.20  ──►  INDEX
+                   ├── linux/amd64  ──►  MANIFEST ──► config + layers
+                   ├── linux/arm64  ──►  MANIFEST ──► config + layers
+                   └── linux/arm    ──►  MANIFEST ──► config + layers
+</code></pre>
+<p>Why both exist: the same tag has to work on an Intel laptop <em>and</em> a
+Raspberry Pi, but those need different binaries, so different layers,
+so different manifests. The index is the one name that fans out to all
+of them. Docker read the index and picked the <code>linux/amd64</code> entry
+because that’s what this laptop is. Our tool will do the same in
+Chapter 6.</p>
+<p>Not every image has an index. An image built for only one kind of
+computer skips it — the tag points straight at a manifest. So asking
+for a tag can get you either reply, and our code has to handle both
+without guessing. Rule of thumb: <strong>a manifest has <code>layers</code>; an index
+has <code>manifests</code>.</strong> If you see <code>layers</code>, you’re at the end of the chain.
+Handling “one of two shapes” safely turns out to be one of the most
+TypeScript-specific lessons in the book.</p>
+<p>Follow the <code>linux/amd64</code> entry. Its <code>digest</code> is the <em>name</em> of the real
+manifest, so ask for it the same way, using the digest where the tag was:</p>
+<pre><code>$ AMD=$(jq -r '.manifests[] | select(.platform.os=="linux" and .platform.architecture=="amd64") | .digest' index.json)
+$ curl -s -H "Authorization: Bearer $TOKEN" \
+    -H "Accept: application/vnd.oci.image.manifest.v1+json" \
+    https://registry-1.docker.io/v2/library/alpine/manifests/$AMD | jq .
+</code></pre>
+<p>You should see (annotations trimmed):</p>
+<pre><code>{
+  "schemaVersion": 2,
+  "mediaType": "application/vnd.oci.image.manifest.v1+json",
+  "config": {
+    "mediaType": "application/vnd.oci.image.config.v1+json",
+    "digest": "sha256:bf8527eb54c3680e728d5b4b383a8ba730d72dae7236fbc8dff97ed6b224a731",
+    "size": 612
+  },
+  "layers": [
+    {
+      "mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+      "digest": "sha256:25f1d6b1951ac8eb3740558fe94cb83d377bdadf95fd9f98b50d2e1b96130471",
+      "size": 3630321
+    }
+  ]
+}
+</code></pre>
+<p><em>This</em> is the manifest. It names two kinds of thing:</p>
+<ul>
+<li><strong><code>config</code></strong> — a small JSON file with settings: which command to run
+by default, which environment variables to set, and so on.</li>
+<li><strong><code>layers</code></strong> — the actual filesystem, as one or more compressed <code>tar</code>
+files. Alpine has exactly one. A typical application image has five to
+fifteen: one for the base OS, one for the packages you installed, one
+for your code, and so on — one per <code>RUN</code>/<code>COPY</code> line in a Dockerfile,
+roughly.</li>
+</ul>
+<p>Look at the layer’s <code>digest</code>: <code>25f1d6b1951a...</code>. That’s the ID
+<code>docker pull</code> printed next to “Pulling fs layer.” Now the whole
+<code>docker pull</code> output reads like a transcript of this conversation.</p>
+<h3 id="step-4-download-the-parts-and-check-them"><a class="header" href="#step-4-download-the-parts-and-check-them">Step 4: Download the parts, and check them</a></h3>
+<p>Each thing in the manifest — the config and every layer — is called a
+<strong>blob</strong> (just “a file of bytes the registry stores”). Every blob is
+named by its digest, and you ask for it by that name:</p>
+<pre><code>$ LAYER=$(curl -s -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.oci.image.manifest.v1+json" https://registry-1.docker.io/v2/library/alpine/manifests/$AMD | jq -r '.layers[0].digest')
+$ curl -sL -H "Authorization: Bearer $TOKEN" \
+    https://registry-1.docker.io/v2/library/alpine/blobs/$LAYER -o layer.tar.gz
+$ stat -c '%s bytes' layer.tar.gz
+$ sha256sum layer.tar.gz
+</code></pre>
+<p>You should see:</p>
+<pre><code>3630321 bytes
+25f1d6b1951ac8eb3740558fe94cb83d377bdadf95fd9f98b50d2e1b96130471  layer.tar.gz
+</code></pre>
+<p>The size matches the manifest’s <code>size</code>. The fingerprint matches the
+manifest’s <code>digest</code>. That second match is the whole security story of
+container images: the name of the file <em>is</em> its fingerprint, so if a
+single byte were changed anywhere between the registry and your disk,
+the name would no longer match and you’d refuse it. (<code>-L</code> tells curl to follow a
+redirect — Docker Hub usually hands blobs off to a file-hosting service.
+Our tool will need to follow that too.)</p>
+<p>And what’s inside? Just a normal compressed <code>tar</code>:</p>
+<pre><code>$ tar tzf layer.tar.gz | head -5
+$ tar tzf layer.tar.gz | wc -l
+</code></pre>
+<pre><code>bin/
+bin/arch
+bin/ash
+bin/base64
+bin/bbconfig
+517
+</code></pre>
+<p>517 files — a whole small Linux userland. Unpack it into a folder and
+that folder is Alpine.</p>
+<p>The config blob is fetched the same way. Trimmed:</p>
+<pre><code>$ CFG=... (the config digest from the manifest)
+$ curl -sL -H "Authorization: Bearer $TOKEN" https://registry-1.docker.io/v2/library/alpine/blobs/$CFG | jq '{architecture, os, config: {Cmd: .config.Cmd}}'
+</code></pre>
+<pre><code>{
+  "architecture": "amd64",
+  "os": "linux",
+  "config": { "Cmd": [ "/bin/sh" ] }
+}
+</code></pre>
+<p>That <code>Cmd</code> is why <code>docker run alpine</code> drops you into a shell.</p>
+<h2 id="so-what-is-an-image"><a class="header" href="#so-what-is-an-image">So what <em>is</em> an image?</a></h2>
+<p>Strip away the words and it’s this:</p>
+<pre><code> name + tag ──► index ──► manifest ──► config      (small JSON)
+   (alpine:3.20)   (per CPU)   └────► layer 1  (tar.gz)
+                                └────► layer 2  (tar.gz)
+                                └────► ...
+</code></pre>
+<p>A short chain of JSON documents, each naming the next by checksum,
+ending in a stack of compressed folders. To turn it into something
+<code>runc</code> can start, you unpack layer 1 into an empty folder, then unpack
+layer 2 on top of it, and so on. Later layers win when a file exists in
+both. And there’s one small rule for deletions: if a layer contains a
+file named <code>.wh.foo</code>, that means “delete <code>foo</code> from the folders below.”
+(There’s one special spelling, <code>.wh..wh..opq</code>, that means “delete
+<em>everything</em> in this folder from below.”) That’s the entire layering
+mechanism. Chapter 9 implements it.</p>
+<h2 id="what-were-going-to-build"><a class="header" href="#what-were-going-to-build">What we’re going to build</a></h2>
+<p><code>oci-pull</code> does those four steps and then unpacks. In pieces:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Piece</th><th>Job</th><th>Chapter</th></tr>
+</thead>
+<tbody>
+<tr><td>reference</td><td>turn <code>alpine:3.20</code> into registry + path + tag</td><td>3</td></tr>
+<tr><td>http client</td><td>make one HTTP call; fakeable in tests</td><td>4</td></tr>
+<tr><td>auth</td><td>read <code>www-authenticate</code>, fetch a token, retry</td><td>5</td></tr>
+<tr><td>manifest</td><td>fetch JSON, check its shape, pick the CPU</td><td>6</td></tr>
+<tr><td>blob store</td><td>download one blob, checksum it as it arrives, keep it</td><td>7</td></tr>
+<tr><td>puller</td><td>download all blobs at once, with a limit, with retries</td><td>8</td></tr>
+<tr><td>unpacker</td><td>apply layers in order into one folder</td><td>9</td></tr>
+<tr><td>cli</td><td>arguments, progress, exit codes, wiring</td><td>10</td></tr>
+</tbody>
+</table>
+</div>
+<p>Each piece is small, does one job, and knows as little as possible about
+the others. That isn’t a style preference; it’s what makes each one
+testable without the internet, and it’s what lets a later chapter swap
+one piece (say, add password login to <code>auth</code>) without touching the rest.
+We’ll point at each of those decisions as we make them.</p>
+<p>Then Chapter 11 does this:</p>
+<pre><code>$ oci-pull alpine:3.20 ./rootfs
+$ runc spec
+$ sudo runc run demo
+/ # cat /etc/alpine-release
+</code></pre>
+<p>No Docker in that transcript — just our tool and the real <code>runc</code> (the
+same low-level program Docker itself uses to start containers).</p>
+<h2 id="why-this-is-a-good-way-to-learn-typescript"><a class="header" href="#why-this-is-a-good-way-to-learn-typescript">Why this is a good way to learn TypeScript</a></h2>
+<p>Because every hard part of TypeScript shows up here for a real reason,
+not a made-up one:</p>
+<ul>
+<li>The registry sends JSON. TypeScript’s types are gone by the time the
+program runs, so “I declared this as a manifest” proves nothing.
+You have to <em>check</em>. That’s the single most important thing to
+understand about the language, and Chapter 6 makes you live it.</li>
+<li>One reply can be an index <em>or</em> a manifest. TypeScript has a clean way
+to say “this value is one of these shapes, and you must look before you
+use it.”</li>
+<li>Downloads are slow and there are many of them. That’s <code>async</code>/<code>await</code>,
+running things at the same time, limiting how many, cancelling, and
+retrying — all of which you know from Go and Python, all of which look
+a bit different here.</li>
+<li>Tests can’t hit Docker Hub. So you learn to fake the network, and then
+the clock, which is the testing skill that transfers to every
+TypeScript job.</li>
+</ul>
+<h2 id="what-you-should-now-be-able-to-answer"><a class="header" href="#what-you-should-now-be-able-to-answer">What you should now be able to answer</a></h2>
+<ul>
+<li>What are the four HTTP exchanges behind <code>docker pull</code>?</li>
+<li>What is a registry, a manifest, an index, a blob, a layer, a digest?</li>
+<li>What is an HTTP header, and which two headers tell you what kind of
+file the registry sent and whether it arrived intact?</li>
+<li>Why does a public image still need a token, and how does the client
+find out where to get one?</li>
+<li>Why can an image name fetch <em>two different shapes</em> of JSON?</li>
+<li>How does a digest protect you from a corrupted download?</li>
+<li>How do layers turn into one folder, and what does <code>.wh.foo</code> mean?</li>
+</ul>
+<h2 id="next-chapter"><a class="header" href="#next-chapter">Next chapter</a></h2>
+<p>Chapter 2 sets up the project: installing Node.js and the TypeScript
+compiler, the handful of compiler settings that actually matter (and why
+“strict” is the one you never turn off), Vitest for tests, and one tiny
+test that proves the whole pipeline works before we write anything real.
+It ends with <code>npm run check</code> green and the first commit.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="00-outline.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                            </a>
+
+                            <a rel="next prefetch" href="02-set-up-the-project.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="00-outline.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                    </a>
+
+                    <a rel="next prefetch" href="02-set-up-the-project.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                    </a>
+            </nav>
+
+        </div>
+
+        <template id=fa-eye><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM432 256c0 79.5-64.5 144-144 144s-144-64.5-144-144s64.5-144 144-144s144 64.5 144 144zM288 192c0 35.3-28.7 64-64 64c-11.5 0-22.3-3-31.6-8.4c-.2 2.8-.4 5.5-.4 8.4c0 53 43 96 96 96s96-43 96-96s-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6z"/></svg></span></template>
+        <template id=fa-eye-slash><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M38.8 5.1C28.4-3.1 13.3-1.2 5.1 9.2S-1.2 34.7 9.2 42.9l592 464c10.4 8.2 25.5 6.3 33.7-4.1s6.3-25.5-4.1-33.7L525.6 386.7c39.6-40.6 66.4-86.1 79.9-118.4c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C465.5 68.8 400.8 32 320 32c-68.2 0-125 26.3-169.3 60.8L38.8 5.1zM223.1 149.5C248.6 126.2 282.7 112 320 112c79.5 0 144 64.5 144 144c0 24.9-6.3 48.3-17.4 68.7L408 294.5c5.2-11.8 8-24.8 8-38.5c0-53-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6c0 10.2-2.4 19.8-6.6 28.3l-90.3-70.8zm223.1 298L373 389.9c-16.4 6.5-34.3 10.1-53 10.1c-79.5 0-144-64.5-144-144c0-6.9 .5-13.6 1.4-20.2L83.1 161.5C60.3 191.2 44 220.8 34.5 243.7c-3.3 7.9-3.3 16.7 0 24.6c14.9 35.7 46.2 87.7 93 131.1C174.5 443.2 239.2 480 320 480c47.8 0 89.9-12.9 126.2-32.5z"/></svg></span></template>
+        <template id=fa-copy><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M502.6 70.63l-61.25-61.25C435.4 3.371 427.2 0 418.7 0H255.1c-35.35 0-64 28.66-64 64l.0195 256C192 355.4 220.7 384 256 384h192c35.2 0 64-28.8 64-64V93.25C512 84.77 508.6 76.63 502.6 70.63zM464 320c0 8.836-7.164 16-16 16H255.1c-8.838 0-16-7.164-16-16L239.1 64.13c0-8.836 7.164-16 16-16h128L384 96c0 17.67 14.33 32 32 32h47.1V320zM272 448c0 8.836-7.164 16-16 16H63.1c-8.838 0-16-7.164-16-16L47.98 192.1c0-8.836 7.164-16 16-16H160V128H63.99c-35.35 0-64 28.65-64 64l.0098 256C.002 483.3 28.66 512 64 512h192c35.2 0 64-28.8 64-64v-32h-47.1L272 448z"/></svg></span></template>
+        <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
+        <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
+
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr-ef4e11c1.min.js"></script>
+        <script src="mark-09e88c2c.min.js"></script>
+        <script src="searcher-09f2665d.js"></script>
+
+        <script src="clipboard-1626706a.min.js"></script>
+        <script src="highlight-abc7f01d.js"></script>
+        <script src="book-609e4cb8.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>
