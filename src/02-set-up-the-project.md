@@ -115,28 +115,38 @@ Create `tsconfig.json`:
 
 ```json
 {
+  // tsconfig.json is allowed to contain comments, unlike normal JSON.
   "compilerOptions": {
-    "rootDir": "./src",
-    "outDir": "./dist",
-    "module": "nodenext",
-    "target": "es2024",
-    "lib": ["es2024"],
-    "types": ["node"],
-    "strict": true,
-    "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": true,
-    "noImplicitReturns": true,
-    "noUnusedLocals": true,
+    // Where things are
+    "rootDir": "./src",   // our source code lives here
+    "outDir": "./dist",   // where built .js would go (Chapter 12)
+
+    // What we run on
+    "module": "nodenext", // resolve imports exactly the way Node does
+    "target": "es2024",   // JavaScript features up to 2024 exist; don't rewrite them
+    "lib": ["es2024"],    // ...and the built-in functions that come with them
+    "types": ["node"],    // load @types/node: types for fs, crypto, process...
+
+    // Strictness
+    "strict": true,                     // every standard check on. Never off.
+    "noUncheckedIndexedAccess": true,   // arr[0] might not exist: "T or undefined"
+    "exactOptionalPropertyTypes": true, // optional field: leave it out, don't set undefined
+    "noImplicitReturns": true,          // every path must return (Go does this for free)
+    "noUnusedLocals": true,             // like Go's "declared and not used"
     "noUnusedParameters": true,
-    "verbatimModuleSyntax": true,
-    "isolatedModules": true,
-    "erasableSyntaxOnly": true,
-    "rewriteRelativeImportExtensions": true,
-    "moduleDetection": "force",
-    "skipLibCheck": true,
-    "sourceMap": true
+
+    // Keeping TypeScript honest (Node runs .ts by deleting the types)
+    "verbatimModuleSyntax": true,            // type-only imports must say `type`
+    "isolatedModules": true,                 // each file understandable on its own
+    "erasableSyntaxOnly": true,              // forbid enum etc: can't be deleted away
+    "rewriteRelativeImportExtensions": true, // allow "./x.ts"; build turns it into "./x.js"
+
+    // Housekeeping
+    "moduleDetection": "force", // every file is a module, never a script
+    "skipLibCheck": true,       // don't re-check types inside node_modules
+    "sourceMap": true           // crash reports point at .ts lines
   },
-  "include": ["src"]
+  "include": ["src"]            // only look in src/
 }
 ```
 
@@ -203,23 +213,33 @@ almost word for word.)
 Create `src/main.ts`:
 
 ```ts
+// `export` makes a name visible to other files (Go: a capital letter).
+// `: string` after the () is the return type.
 export function usage(): string {
-  return "usage: oci-pull <image> <output-dir>";
+  return "usage: oci-pull <image> <output-dir>"
 }
 
+// argv: string[] — a parameter named argv that is an array of strings.
+// Returns a number (the exit code) instead of exiting: easy to test.
 export function main(argv: string[]): number {
-  if (argv.length !== 2) {
-    console.error(usage());
-    return 2;
+  if (argv.length !== 2) {       // !== is "not equal", no type conversion
+    console.error(usage())      // write to stderr
+    return 2
   }
-  const [image, outputDir] = argv;
-  console.log(`would pull ${image} into ${outputDir}`);
-  return 0;
+  // Pull the first two array elements into two names.
+  const [image, outputDir] = argv
+  // Backtick string: ${...} inserts a value (Go: fmt.Sprintf, Python: f"").
+  console.log(`would pull ${image} into ${outputDir}`)
+  return 0
 }
 ```
 
 Almost readable as Go. The differences worth noticing:
 
+- No semicolons at the ends of lines. JavaScript puts them in for you
+  at each line break, the same way Go does, so this book leaves them
+  out. (You'll see plenty of code that writes them; both styles are
+  normal.) There's one catch, covered in Chapter 2.5.
 - Types go *after* the name, with a colon: `argv: string[]`, and the
   return type after the parameter list: `: number`. Same order as Go,
   different punctuation.
@@ -244,9 +264,12 @@ Now a second file, `src/cli.ts`, which is the *only* file that does
 something when it runs:
 
 ```ts
-import { main } from "./main.ts";
+// The only file that DOES something when run. Everything else just defines things.
+import { main } from "./main.ts"
 
-process.exitCode = main(process.argv.slice(2));
+// process.argv is Go's os.Args: [node, script, ...your args].
+// .slice(2) drops the first two. Setting exitCode lets Node exit cleanly with it.
+process.exitCode = main(process.argv.slice(2))
 ```
 
 `process.argv` is `os.Args`: the first two entries are `node` and the
@@ -296,16 +319,19 @@ Vitest looks for files ending in `.test.ts`. We'll keep each test file
 next to the file it tests. Create `src/main.test.ts`:
 
 ```ts
-import { describe, expect, it } from "vitest";
-import { usage } from "./main.ts";
+import { describe, expect, it } from "vitest"
+import { usage } from "./main.ts"
 
+// describe(name, fn) groups tests. `() => { ... }` is a nameless function.
 describe("usage", () => {
+  // it(name, fn) is one test, named as a sentence.
   it("names the program and both arguments", () => {
-    expect(usage()).toContain("oci-pull");
-    expect(usage()).toContain("<image>");
-    expect(usage()).toContain("<output-dir>");
-  });
-});
+    // expect(value).toContain(piece): the string must include that piece.
+    expect(usage()).toContain("oci-pull")
+    expect(usage()).toContain("<image>")
+    expect(usage()).toContain("<output-dir>")
+  })
+})
 ```
 
 Reading it: `describe` groups tests under a name; `it` is one test,
@@ -355,13 +381,15 @@ Here's the surprise promised at the top of the chapter. Add a second
 test file, `src/oops.test.ts`, with a deliberate type error in it:
 
 ```ts
-import { expect, it } from "vitest";
-import { usage } from "./main.ts";
+import { expect, it } from "vitest"
+import { usage } from "./main.ts"
 
 it("types vanish at run time", () => {
-  const n: number = usage();
-  expect(n).toContain("oci-pull");
-});
+  // WRONG on purpose: usage() returns a string, we claim it's a number.
+  const n: number = usage()
+  // Vitest deletes `: number` and runs the rest — which works fine.
+  expect(n).toContain("oci-pull")
+})
 ```
 
 `usage()` returns a string. We've declared `n` as a number. That's

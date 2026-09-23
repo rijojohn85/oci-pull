@@ -23,6 +23,11 @@
 - Terminal blocks: commands start with `$ `. Output has no prefix. When
   in doubt, split into two blocks with "you should see:" between.
 - Later chapters show edits, not full reprints; say which file and where.
+- No semicolons at line ends (ASI); a statement starting with [ ( or `
+  gets a leading ;. Check user code and book blocks for that hazard.
+- Every code block carries plain-word inline comments explaining the
+  syntax and intent of non-obvious lines, so the reader never has to
+  flip back to the prose to read the code.
 
 ## Process
 - One chapter at a time. Write it, stop, user tries it, then next.

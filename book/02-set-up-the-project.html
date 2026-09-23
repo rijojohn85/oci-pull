@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-a144fdc2.js";
+            window.path_to_searchindex_js = "searchindex-d0daebb5.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-b48846b6.js"></script>
@@ -257,28 +257,38 @@ before 7.</p>
 by hand instead, so every line is a line you understand.</p>
 <p>Create <code>tsconfig.json</code>:</p>
 <pre><code class="language-json">{
+  // tsconfig.json is allowed to contain comments, unlike normal JSON.
   "compilerOptions": {
-    "rootDir": "./src",
-    "outDir": "./dist",
-    "module": "nodenext",
-    "target": "es2024",
-    "lib": ["es2024"],
-    "types": ["node"],
-    "strict": true,
-    "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": true,
-    "noImplicitReturns": true,
-    "noUnusedLocals": true,
+    // Where things are
+    "rootDir": "./src",   // our source code lives here
+    "outDir": "./dist",   // where built .js would go (Chapter 12)
+
+    // What we run on
+    "module": "nodenext", // resolve imports exactly the way Node does
+    "target": "es2024",   // JavaScript features up to 2024 exist; don't rewrite them
+    "lib": ["es2024"],    // ...and the built-in functions that come with them
+    "types": ["node"],    // load @types/node: types for fs, crypto, process...
+
+    // Strictness
+    "strict": true,                     // every standard check on. Never off.
+    "noUncheckedIndexedAccess": true,   // arr[0] might not exist: "T or undefined"
+    "exactOptionalPropertyTypes": true, // optional field: leave it out, don't set undefined
+    "noImplicitReturns": true,          // every path must return (Go does this for free)
+    "noUnusedLocals": true,             // like Go's "declared and not used"
     "noUnusedParameters": true,
-    "verbatimModuleSyntax": true,
-    "isolatedModules": true,
-    "erasableSyntaxOnly": true,
-    "rewriteRelativeImportExtensions": true,
-    "moduleDetection": "force",
-    "skipLibCheck": true,
-    "sourceMap": true
+
+    // Keeping TypeScript honest (Node runs .ts by deleting the types)
+    "verbatimModuleSyntax": true,            // type-only imports must say `type`
+    "isolatedModules": true,                 // each file understandable on its own
+    "erasableSyntaxOnly": true,              // forbid enum etc: can't be deleted away
+    "rewriteRelativeImportExtensions": true, // allow "./x.ts"; build turns it into "./x.js"
+
+    // Housekeeping
+    "moduleDetection": "force", // every file is a module, never a script
+    "skipLibCheck": true,       // don't re-check types inside node_modules
+    "sourceMap": true           // crash reports point at .ts lines
   },
-  "include": ["src"]
+  "include": ["src"]            // only look in src/
 }
 </code></pre>
 <p>Line by line, in groups:</p>
@@ -338,22 +348,32 @@ running <code>.ts</code> files recommends the “keeping TypeScript honest” gr
 almost word for word.)</p>
 <h2 id="the-first-source-file"><a class="header" href="#the-first-source-file">The first source file</a></h2>
 <p>Create <code>src/main.ts</code>:</p>
-<pre><code class="language-ts">export function usage(): string {
-  return "usage: oci-pull &lt;image&gt; &lt;output-dir&gt;";
+<pre><code class="language-ts">// `export` makes a name visible to other files (Go: a capital letter).
+// `: string` after the () is the return type.
+export function usage(): string {
+  return "usage: oci-pull &lt;image&gt; &lt;output-dir&gt;"
 }
 
+// argv: string[] — a parameter named argv that is an array of strings.
+// Returns a number (the exit code) instead of exiting: easy to test.
 export function main(argv: string[]): number {
-  if (argv.length !== 2) {
-    console.error(usage());
-    return 2;
+  if (argv.length !== 2) {       // !== is "not equal", no type conversion
+    console.error(usage())      // write to stderr
+    return 2
   }
-  const [image, outputDir] = argv;
-  console.log(`would pull ${image} into ${outputDir}`);
-  return 0;
+  // Pull the first two array elements into two names.
+  const [image, outputDir] = argv
+  // Backtick string: ${...} inserts a value (Go: fmt.Sprintf, Python: f"").
+  console.log(`would pull ${image} into ${outputDir}`)
+  return 0
 }
 </code></pre>
 <p>Almost readable as Go. The differences worth noticing:</p>
 <ul>
+<li>No semicolons at the ends of lines. JavaScript puts them in for you
+at each line break, the same way Go does, so this book leaves them
+out. (You’ll see plenty of code that writes them; both styles are
+normal.) There’s one catch, covered in Chapter 2.5.</li>
 <li>Types go <em>after</em> the name, with a colon: <code>argv: string[]</code>, and the
 return type after the parameter list: <code>: number</code>. Same order as Go,
 different punctuation.</li>
@@ -376,9 +396,12 @@ everywhere.</li>
 </ul>
 <p>Now a second file, <code>src/cli.ts</code>, which is the <em>only</em> file that does
 something when it runs:</p>
-<pre><code class="language-ts">import { main } from "./main.ts";
+<pre><code class="language-ts">// The only file that DOES something when run. Everything else just defines things.
+import { main } from "./main.ts"
 
-process.exitCode = main(process.argv.slice(2));
+// process.argv is Go's os.Args: [node, script, ...your args].
+// .slice(2) drops the first two. Setting exitCode lets Node exit cleanly with it.
+process.exitCode = main(process.argv.slice(2))
 </code></pre>
 <p><code>process.argv</code> is <code>os.Args</code>: the first two entries are <code>node</code> and the
 script, so <code>.slice(2)</code> drops them. Setting <code>process.exitCode</code> lets Node
@@ -412,16 +435,19 @@ place where all the pieces get wired together.</p>
 <h2 id="the-first-test"><a class="header" href="#the-first-test">The first test</a></h2>
 <p>Vitest looks for files ending in <code>.test.ts</code>. We’ll keep each test file
 next to the file it tests. Create <code>src/main.test.ts</code>:</p>
-<pre><code class="language-ts">import { describe, expect, it } from "vitest";
-import { usage } from "./main.ts";
+<pre><code class="language-ts">import { describe, expect, it } from "vitest"
+import { usage } from "./main.ts"
 
+// describe(name, fn) groups tests. `() =&gt; { ... }` is a nameless function.
 describe("usage", () =&gt; {
+  // it(name, fn) is one test, named as a sentence.
   it("names the program and both arguments", () =&gt; {
-    expect(usage()).toContain("oci-pull");
-    expect(usage()).toContain("&lt;image&gt;");
-    expect(usage()).toContain("&lt;output-dir&gt;");
-  });
-});
+    // expect(value).toContain(piece): the string must include that piece.
+    expect(usage()).toContain("oci-pull")
+    expect(usage()).toContain("&lt;image&gt;")
+    expect(usage()).toContain("&lt;output-dir&gt;")
+  })
+})
 </code></pre>
 <p>Reading it: <code>describe</code> groups tests under a name; <code>it</code> is one test,
 named as a sentence; <code>expect(x).toContain(y)</code> is the assertion. The
@@ -457,13 +483,15 @@ one you’ll run at the end of every chapter.</p>
 <h2 id="why-check-runs-two-things"><a class="header" href="#why-check-runs-two-things">Why <code>check</code> runs two things</a></h2>
 <p>Here’s the surprise promised at the top of the chapter. Add a second
 test file, <code>src/oops.test.ts</code>, with a deliberate type error in it:</p>
-<pre><code class="language-ts">import { expect, it } from "vitest";
-import { usage } from "./main.ts";
+<pre><code class="language-ts">import { expect, it } from "vitest"
+import { usage } from "./main.ts"
 
 it("types vanish at run time", () =&gt; {
-  const n: number = usage();
-  expect(n).toContain("oci-pull");
-});
+  // WRONG on purpose: usage() returns a string, we claim it's a number.
+  const n: number = usage()
+  // Vitest deletes `: number` and runs the rest — which works fine.
+  expect(n).toContain("oci-pull")
+})
 </code></pre>
 <p><code>usage()</code> returns a string. We’ve declared <code>n</code> as a number. That’s
 wrong. Run only the tests:</p>

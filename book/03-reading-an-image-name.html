@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-a144fdc2.js";
+            window.path_to_searchindex_js = "searchindex-d0daebb5.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-b48846b6.js"></script>
@@ -174,7 +174,703 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="reading-an-image-name"><a class="header" href="#reading-an-image-name">Reading an Image Name</a></h1>
+                        <h1 id="chapter-3-reading-an-image-name"><a class="header" href="#chapter-3-reading-an-image-name">Chapter 3: Reading an Image Name</a></h1>
+<p>Chapter 1 ended with this observation: you type <code>alpine:3.20</code>, and
+Docker prints <code>docker.io/library/alpine:3.20</code>. Something filled in the
+blanks. This chapter builds that something.</p>
+<p>It’s the right first piece for three reasons. It needs no network and
+no disk, so it’s pure logic that’s easy to test. It has more edge cases
+than you’d guess, so the tests are worth writing. And it produces the
+value every later chapter starts from: a <code>Reference</code>.</p>
+<p>Everything in this chapter goes into your project. Run <code>npm run check</code>
+at the end; it should be green.</p>
+<h2 id="the-rules-from-the-source"><a class="header" href="#the-rules-from-the-source">The rules, from the source</a></h2>
+<p>The rules aren’t invented — they’re in the <code>distribution/reference</code>
+package that Docker and every other registry client uses. Here’s the
+grammar, copied from that package’s own doc comment:</p>
+<pre><code>reference := name [ ":" tag ] [ "@" digest ]
+name      := [domain '/'] remote-name
+domain    := host [':' port-number]
+path      := path-component ['/' path-component]*
+tag       := /[\w][\w.-]{0,127}/
+digest    := digest-algorithm ":" digest-hex
+</code></pre>
+<p>In plain words, an image name is up to four things, and only the middle
+one is required:</p>
+<pre><code>   ghcr.io / astral-sh/uv : 0.4.0
+   ───┬───   ─────┬─────   ──┬──
+ registry    repository     tag
+</code></pre>
+<p>and instead of a tag you may give a digest — the fingerprint from
+Chapter 1 — after an <code>@</code>:</p>
+<pre><code>   alpine @ sha256:d9e853e8...
+</code></pre>
+<p>Leave parts out and defaults appear. Those defaults are also in the
+source, in a file called <code>normalize.go</code>:</p>
+<ul>
+<li>no registry → <code>docker.io</code></li>
+<li>registry is <code>docker.io</code> <em>and</em> the repository has no <code>/</code> →
+prefix <code>library/</code></li>
+<li>no tag and no digest → <code>latest</code></li>
+</ul>
+<p>So <code>alpine</code> means <code>docker.io/library/alpine:latest</code>. That matches what
+<code>docker pull alpine</code> printed in Chapter 1.</p>
+<p>The interesting rule is how you tell a registry from the first part of
+a repository. Both sit before a <code>/</code>:</p>
+<pre><code>ghcr.io/astral-sh/uv        ← ghcr.io is a registry
+rijojohn85/oci-pull         ← rijojohn85 is part of the repository
+</code></pre>
+<p>There’s no list of known registries. The real rule, from
+<code>normalize.go</code>: the first part is a registry if it is exactly
+<code>localhost</code>, or if it contains a <code>.</code> or a <code>:</code>. Hostnames have dots;
+ports have colons; <code>localhost</code> is the special case with neither. That’s
+it. A dumb rule that has held up for a decade.</p>
+<h2 id="what-were-building"><a class="header" href="#what-were-building">What we’re building</a></h2>
+<p>One function, <code>parseReference</code>, that takes the string a user typed and
+returns a value with the blanks filled in — or throws, with a message
+that says what’s wrong.</p>
+<p>This is worth naming before we write it: <code>parseReference</code> doesn’t fetch
+anything, doesn’t read a config file, doesn’t print anything, and
+doesn’t know a registry exists. It turns a string into a value. That’s
+its whole job, and it’s why the tests below need no setup at all. Every
+piece in this project is meant to be this boring. When a later chapter
+has a piece that’s hard to test, that’s the signal it’s doing two jobs.</p>
+<h2 id="start-with-a-failing-test"><a class="header" href="#start-with-a-failing-test">Start with a failing test</a></h2>
+<p>Create <code>src/reference.test.ts</code>:</p>
+<pre><code class="language-ts">// Vitest's building blocks. `import { a, b } from "x"` pulls named
+// things out of another module (Go: import a package, use pkg.Name).
+import { describe, expect, it } from "vitest"
+// Our own file. Imports between our files are relative and end in .ts.
+import { parseReference } from "./reference.ts"
+
+// describe(name, fn) groups related tests under one heading.
+// `() =&gt; { ... }` is a function with no name (Go: func() { ... }).
+describe("parseReference", () =&gt; {
+  // it(name, fn) is one test. Name it as a sentence about behaviour.
+  it("fills in Docker Hub's defaults for a bare name", () =&gt; {
+    // toEqual compares every field, deeply — not "same object in memory".
+    expect(parseReference("alpine")).toEqual({
+      kind: "tag",
+      registry: "docker.io",
+      repository: "library/alpine",
+      tag: "latest",
+    })
+  })
+})
+</code></pre>
+<p>Reminders, since these were only introduced one chapter ago:
+<code>describe</code> groups tests, <code>it</code> is one test named as a sentence, and the
+<code>() =&gt; { ... }</code> is a function with no name. <code>toEqual</code> compares
+structure — every field, deeply — rather than asking “is this the same
+object in memory.”</p>
+<p>There’s no <code>reference.ts</code> yet, so:</p>
+<pre><code>$ npm test
+</code></pre>
+<pre><code> FAIL  src/reference.test.ts [ src/reference.test.ts ]
+Error: Cannot find module './reference.ts' imported from .../src/reference.test.ts
+ ❯ src/reference.test.ts:2:1
+      1| import { describe, expect, it } from "vitest";
+      2| import { parseReference } from "./reference.ts";
+       | ^
+</code></pre>
+<p>Good — the test runs and fails for the honest reason. This book isn’t
+test-first as a rule, but seeing a test fail <em>before</em> it passes is the
+only way to know the test would ever catch anything. Do it for the
+first test of each new file and you’ll never ship a test that passes
+for the wrong reason.</p>
+<h2 id="the-shape-of-the-answer"><a class="header" href="#the-shape-of-the-answer">The shape of the answer</a></h2>
+<p>Create <code>src/reference.ts</code>. First, the type of what we return.</p>
+<p>A reference is a registry, a repository, and then <em>either</em> a tag <em>or</em> a
+digest — never both, never neither. Chapter 2.5 section 4 had a name
+for “one of these”: a <strong>union type</strong>, written with <code>|</code>. And the trick
+that makes a union usable is giving each shape a field whose value
+identifies it, so an ordinary <code>if</code> or <code>switch</code> tells the compiler which
+one you’re holding:</p>
+<pre><code class="language-ts">// The fields every reference has. No `export`: only used in this file.
+interface ReferenceBase {
+  // readonly = set once when the object is made, never changed after.
+  readonly registry: string   // e.g. "docker.io", "ghcr.io"
+  readonly repository: string // e.g. "library/alpine"
+}
+
+// `extends` = "everything ReferenceBase has, plus these".
+export interface TaggedReference extends ReferenceBase {
+  // Typed as one exact string, not `string`. This field is how code
+  // tells the two shapes apart.
+  readonly kind: "tag"
+  readonly tag: string // e.g. "3.20", "latest"
+}
+
+export interface DigestedReference extends ReferenceBase {
+  readonly kind: "digest"
+  readonly digest: string // e.g. "sha256:d9e853e8..."
+}
+
+// `|` means "or": a Reference is exactly one of the two shapes above.
+// Never both a tag and a digest, never neither.
+export type Reference = TaggedReference | DigestedReference
+</code></pre>
+<p>Points worth slowing down on:</p>
+<ul>
+<li><code>kind</code> is typed as <em>one exact string</em>, not <code>string</code>. That’s the
+identifying field. <code>"tag"</code> is both a type and a value here.</li>
+<li><code>extends</code> on an interface means “everything that has, plus.” Both
+kinds have a registry and a repository.</li>
+<li><code>readonly</code> (Chapter 2.5 section 7) means assign once, never change.
+A parsed reference is a fact about what the user typed; nothing
+downstream should be rewriting it.</li>
+<li><code>export</code> makes a name visible outside the file — the job a capital
+letter does in Go.</li>
+</ul>
+<p>We could have used one interface with optional <code>tag?</code> and <code>digest?</code>
+fields. That would let both be missing, or both be set, and every
+reader of a <code>Reference</code> would have to check. The union makes the
+impossible states impossible to write down. This is the whole reason
+unions are worth the ceremony.</p>
+<h2 id="an-error-type-of-our-own"><a class="header" href="#an-error-type-of-our-own">An error type of our own</a></h2>
+<p>Next, what happens when the input is nonsense. Chapter 2.5 section 5:
+throw <code>Error</code> objects, and make your own kind by extending <code>Error</code>.</p>
+<pre><code class="language-ts">// Our own kind of error. `extends Error` means it is an Error (has a
+// message and a stack trace) plus whatever we add.
+export class InvalidReferenceError extends Error {
+  // The bad input, kept as data so callers needn't dig it out of the message.
+  readonly input: string
+
+  // Runs when someone writes `new InvalidReferenceError(input, problem)`.
+  constructor(input: string, problem: string) {
+    // super(...) runs Error's own constructor, which sets `message`.
+    // Backtick strings with ${...} inside are TypeScript's f-strings.
+    super(`invalid image reference "${input}": ${problem}`)
+    // Makes stack traces say InvalidReferenceError, not plain Error.
+    this.name = "InvalidReferenceError"
+    this.input = input
+  }
+}
+</code></pre>
+<p><code>super(...)</code> calls <code>Error</code>’s own constructor with the message text.
+Setting <code>this.name</code> is what makes a stack trace say
+<code>InvalidReferenceError</code> rather than a generic <code>Error</code>. Keeping <code>input</code>
+as a field means a caller can report the bad value without
+re-parsing the message string.</p>
+<p>Why a class instead of <code>throw new Error("bad reference")</code>? Because the
+command-line layer in Chapter 10 needs to tell “the user typed a bad
+name” (their fault, print the message, exit 1) apart from “the network
+died” (not their fault, different exit code). <code>instanceof</code> answers that
+in one line. A string message can’t.</p>
+<h2 id="the-defaults-named"><a class="header" href="#the-defaults-named">The defaults, named</a></h2>
+<pre><code class="language-ts">// Each default written exactly once. `const` = this name can never be
+// pointed at a different value.
+const DEFAULT_REGISTRY = "docker.io"
+const DEFAULT_TAG = "latest"
+const OFFICIAL_PREFIX = "library/" // Docker Hub's folder for official images
+</code></pre>
+<p>Three constants rather than three string literals sprinkled through the
+function. If <code>"docker.io"</code> appeared in four places, a future change
+would mean finding all four — and the one you miss is the bug. Write
+each fact once. That’s the whole of the “don’t repeat yourself” rule,
+and it applies to strings as much as to code.</p>
+<h2 id="splitting-the-registry-off"><a class="header" href="#splitting-the-registry-off">Splitting the registry off</a></h2>
+<pre><code class="language-ts">// The rule from normalize.go: the first part before "/" is a registry
+// only if it is "localhost" or contains a "." or a ":".
+// No `export`, so private to this file (Go: a lowercase name).
+function looksLikeRegistry(candidate: string): boolean {
+  return candidate === "localhost" || candidate.includes(".") || candidate.includes(":")
+}
+
+// Returns TWO values as a fixed-length array (a "tuple"). The names
+// inside [...] are labels for readers only. Go: (string, string).
+function splitRegistry(name: string): [registry: string, repository: string] {
+  const slash = name.indexOf("/") // -1 means "not found"
+  if (slash === -1) {
+    // "alpine": no slash at all, so it can't have a registry.
+    return [DEFAULT_REGISTRY, name]
+  }
+  const head = name.slice(0, slash) // slice(a, b) is Python's s[a:b]
+  if (!looksLikeRegistry(head)) {
+    // "rijojohn85/oci-pull": the first part is a user, not a host.
+    return [DEFAULT_REGISTRY, name]
+  }
+  // "ghcr.io/astral-sh/uv": split at the first slash.
+  return [head, name.slice(slash + 1)]
+}
+</code></pre>
+<p>No <code>export</code> on either, so they’re private to this file — Go’s lowercase
+name. <code>looksLikeRegistry</code> is a separate function with a name that says
+what the rule <em>is</em>; inlining those three comparisons into the <code>if</code>
+below would work and read worse.</p>
+<p>The return type <code>[registry: string, repository: string]</code> is a <strong>tuple</strong>:
+an array with a fixed length and a type per position. The names are
+labels for readers and editors only. It’s the closest thing TypeScript
+has to Go’s multiple return values. <code>slice(a, b)</code> is Python’s <code>s[a:b]</code>.</p>
+<h2 id="peeling-the-string-one-named-step-at-a-time"><a class="header" href="#peeling-the-string-one-named-step-at-a-time">Peeling the string, one named step at a time</a></h2>
+<p>The plan is to peel the input from the right: cut off the digest (after
+<code>@</code>), then the tag (after the last <code>:</code>), then split the registry off the
+front, and whatever is left is the repository.</p>
+<p>You could write that as one long function, and a first draft usually
+is one. It works, but it’s forty lines doing four jobs, and you have to
+read all forty to find out what those jobs are. The clean-code move is
+to give each job its own small function with a name that says what it
+does. <code>parseReference</code> then becomes a short list of steps that reads
+like the paragraph above. Each helper is small enough to check by eye,
+and a bug has one obvious place to live.</p>
+<p>Each peeling step needs to hand back <strong>two</strong> things: the piece it found,
+and the string with that piece cut off, ready for the next step. Here’s
+the digest step:</p>
+<pre><code class="language-ts">// Finds "@&lt;digest&gt;" at the end, checks it, and cuts it off.
+// Returns an object with two fields: the digest it found (or undefined
+// if there was no "@"), and the string that's left without it.
+function extractDigest(
+  rest: string,
+  input: string, // the original text, only used in error messages
+): { digest: string | undefined; rest: string } {
+  const at = rest.indexOf("@") // -1 means "not found"
+  if (at === -1) {
+    // No digest: hand the string back unchanged.
+    // `{ rest }` is shorthand for `{ rest: rest }`.
+    return { digest: undefined, rest }
+  }
+  const digest = rest.slice(at + 1) // everything after "@"
+  if (!DIGEST_PATTERN.test(digest)) {
+    throw new InvalidReferenceError(input, `"${digest}" is not a valid digest`)
+  }
+  // rest.slice(0, at) is everything BEFORE "@": the digest is gone.
+  return { digest, rest: rest.slice(0, at) }
+}
+</code></pre>
+<p>The return type <code>{ digest: string | undefined; rest: string }</code> describes
+an object shape written inline, without a separate <code>interface</code>. That’s
+fine for a private helper whose result is unpacked immediately. It’s
+TypeScript’s version of Go’s <code>(string, string)</code> two-value return,
+except each value has a name.</p>
+<p>The tag step has the same shape:</p>
+<pre><code class="language-ts">// Finds ":&lt;tag&gt;" at the end, checks it, and cuts it off.
+function extractTag(
+  rest: string,
+  input: string,
+): { tag: string | undefined; rest: string } {
+  const colon = rest.lastIndexOf(":")
+  const lastSlash = rest.lastIndexOf("/")
+  // A colon only starts a tag if it comes AFTER the last "/".
+  // In "localhost:5000/dev/app" the colon is a port, not a tag.
+  if (colon === -1 || colon &lt;= lastSlash) {
+    return { tag: undefined, rest }
+  }
+  const tag = rest.slice(colon + 1)
+  if (!TAG_PATTERN.test(tag)) {
+    throw new InvalidReferenceError(input, `"${tag}" is not a valid tag`)
+  }
+  return { tag, rest: rest.slice(0, colon) }
+}
+</code></pre>
+<p>And now the function that uses them:</p>
+<pre><code class="language-ts">export function parseReference(input: string): Reference {
+  if (input === "") {
+    // throw ends the function and hands the error to whoever called us.
+    throw new InvalidReferenceError(input, "the name is empty")
+  }
+
+  // Each step takes the previous step's leftover string.
+  // `{ digest, rest: restAfterDigest }` unpacks the returned object:
+  // take its `digest` field into a variable called `digest`, and its
+  // `rest` field into a variable called `restAfterDigest`.
+  const { digest, rest: restAfterDigest } = extractDigest(input, input)
+  const { tag, rest: restAfterTag } = extractTag(restAfterDigest, input)
+  // Unpack the two-value tuple from splitRegistry into two names.
+  const [registry, name] = splitRegistry(restAfterTag)
+
+  // `cond ? a : b` is an if that produces a value (Python: a if cond else b).
+  // Only single-word Docker Hub names get "library/" in front.
+  const repository = registry === DEFAULT_REGISTRY &amp;&amp; !name.includes("/")
+    ? OFFICIAL_PREFIX + name
+    : name
+
+  if (!REPOSITORY_PATTERN.test(repository)) {
+    throw new InvalidReferenceError(input, `"${name}" is not a valid repository name`)
+  }
+
+  // A digest wins over a tag if both were given (Docker does the same).
+  if (digest !== undefined) {
+    return { kind: "digest", registry, repository, digest }
+  }
+  // `??` = "the left side, unless it's missing, then the right side".
+  return { kind: "tag", registry, repository, tag: tag ?? DEFAULT_TAG }
+}
+</code></pre>
+<p>Things to notice:</p>
+<p><strong>Every name is <code>const</code>.</strong> <code>const</code> means a name can’t be pointed at a
+different value later; <code>let</code> means it can. The long version of this
+function needed <code>let rest</code> and reassigned it after each step. With each
+step’s output under its own name (<code>restAfterDigest</code>, <code>restAfterTag</code>),
+nothing is ever reassigned, and you can read any line knowing exactly
+what each name holds. Default to <code>const</code> and use <code>let</code> only when you
+really must reassign. (There’s also an old keyword, <code>var</code>, with confusing
+scoping rules. Never use it.)</p>
+<p><strong>Why rename <code>rest</code>?</strong> Both helpers return a field called <code>rest</code>. You
+can’t unpack two things into the same name in one scope, so
+<code>rest: restAfterDigest</code> means “the field is called <code>rest</code>, but call it
+<code>restAfterDigest</code> here.” The new name also says which step it came from.</p>
+<p><strong><code>string | undefined</code>.</strong> <code>digest</code> and <code>tag</code> might not be there, so their
+type is “a string, or missing”: a union again, this time with
+<code>undefined</code>. TypeScript won’t let us use either as a plain string until
+we’ve ruled out <code>undefined</code>. That’s why the bottom of the function
+checks <code>digest !== undefined</code> and writes <code>tag ?? DEFAULT_TAG</code>.</p>
+<p><strong><code>{ kind: "digest", registry, repository, digest }</code></strong>: writing just
+<code>registry</code> is shorthand for <code>registry: registry</code>, when the field and the
+variable share a name.</p>
+<h3 id="the-trap-a-helper-that-shortens-a-string-must-return-the-shorter-string"><a class="header" href="#the-trap-a-helper-that-shortens-a-string-must-return-the-shorter-string">The trap: a helper that shortens a string must return the shorter string</a></h3>
+<p>This bug is easy to write, and it happened for real while this chapter
+was being tested. Here is a first draft of <code>extractDigest</code> that returns
+only the digest:</p>
+<pre><code class="language-ts">// BROKEN: finds the digest but can't cut it off the string.
+function extractDigest(rest: string, input: string): string | undefined {
+  const at = rest.indexOf("@")
+  if (at === -1) {
+    return undefined
+  }
+  const digest = rest.slice(at + 1)
+  if (!DIGEST_PATTERN.test(digest)) {
+    throw new InvalidReferenceError(input, `"${digest}" is not a valid digest`)
+  }
+  return digest // the digest comes back, but the caller's string still has it
+}
+</code></pre>
+<p>It looks finished. It finds the digest, checks it, and returns it. But
+it can’t change the caller’s string: assigning to a parameter inside a
+function only changes the function’s own copy, the same as in Go and
+Python. So the caller still holds <code>alpine@sha256:d9e8...</code>, and passes
+that to <code>extractTag</code>, which finds the last <code>:</code> (the one inside <code>sha256:</code>),
+treats the hex after it as a tag (hex is valid tag text), and leaves
+<code>alpine@sha256</code> as the name. Three tests fail, all with the same message:</p>
+<pre><code> FAIL  src/reference.test.ts &gt; parseReference &gt; reads a digest reference
+InvalidReferenceError: invalid image reference "alpine@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc": "alpine@sha256" is not a valid repository name
+</code></pre>
+<p>Read the failure like a detective: the repository came out as
+<code>alpine@sha256</code>, so the <code>@</code> part was never cut off. That points straight
+at the digest step. Every failing test has an <code>@</code> in it. Every passing
+one doesn’t.</p>
+<p>The fix is the version above: return both the piece <em>and</em> what’s left.
+That’s why both helpers have the same return shape. It’s a pattern worth
+recognising: <strong>any step in a pipeline that consumes part of its input
+must hand back the unconsumed part.</strong></p>
+<p>The three patterns near the top of the file are the grammar above,
+written as regular expressions:</p>
+<pre><code class="language-ts">// Regular expressions go between slashes, not quotes. .test(s) → true/false.
+// ^ and $ pin the match to the WHOLE string, not just a piece of it.
+
+// A word character, then up to 127 more of: word chars, "." or "-".
+const TAG_PATTERN = /^[\w][\w.-]{0,127}$/
+// "&lt;algorithm&gt;:&lt;at least 32 hex characters&gt;", e.g. "sha256:d9e8...".
+const DIGEST_PATTERN = /^[a-z0-9]+(?:[.+_-][a-z0-9]+)*:[0-9a-fA-F]{32,}$/
+// Lowercase words joined by ".", "_", "__" or dashes, separated by "/".
+// Straight from the grammar's path-component rule.
+const REPOSITORY_PATTERN = /^[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*(?:\/[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*)*$/
+</code></pre>
+<p>In TypeScript a regular expression is written between slashes rather
+than in quotes, and <code>.test(s)</code> returns true or false. <code>^</code> and <code>$</code> pin
+it to the whole string — without them, <code>TAG_PATTERN</code> would happily
+match a good tag hiding inside a bad one. The repository one is
+unpleasant to look at; it’s a direct transcription of <code>path-component</code>
+from the grammar, and the important part is that it demands lowercase,
+which is why <code>Alpine</code> is rejected. Docker agrees, and says so in almost
+the same words:</p>
+<pre><code>$ docker pull Alpine
+</code></pre>
+<pre><code>invalid reference format: repository name (library/Alpine) must be lowercase
+</code></pre>
+<h2 id="using-the-union"><a class="header" href="#using-the-union">Using the union</a></h2>
+<p>One small function, to end the file:</p>
+<pre><code class="language-ts">// The part of the URL after /manifests/: a tag or a digest.
+export function target(ref: Reference): string {
+  // Switching on `kind` tells the compiler which shape `ref` is.
+  switch (ref.kind) {
+    case "tag":
+      return ref.tag    // here ref is a TaggedReference, so .tag exists
+    case "digest":
+      return ref.digest // here ref is a DigestedReference
+  }
+  // No default needed: the compiler knows both cases are covered.
+  // Remove one and it refuses to compile.
+}
+</code></pre>
+<p>This is the bit of the URL that goes after <code>/manifests/</code> — Chapter 1’s
+<code>curl</code> calls used a tag first, then a digest, in exactly that slot.</p>
+<p>It’s also the payoff for the union. Inside <code>case "tag"</code>, TypeScript
+knows <code>ref</code> is a <code>TaggedReference</code>, so <code>ref.tag</code> is allowed. Inside
+<code>case "digest"</code>, it’s a <code>DigestedReference</code>. Reaching for <code>ref.tag</code>
+before the <code>switch</code> is an error:</p>
+<pre><code>error TS2339: Property 'tag' does not exist on type 'Reference'.
+  Property 'tag' does not exist on type 'DigestedReference'.
+</code></pre>
+<p>And if you delete the second <code>case</code>:</p>
+<pre><code>error TS2366: Function lacks ending return statement and return type does not include 'undefined'.
+</code></pre>
+<p>The compiler noticed a shape you forgot. Add a third kind of reference
+next year and every <code>switch</code> that doesn’t handle it stops compiling —
+which is the “open for extension, closed for modification” idea doing
+something useful rather than being a slogan: you extend the union, and
+the compiler hands you the list of places to update.</p>
+<h3 id="the-finished-file-in-order"><a class="header" href="#the-finished-file-in-order">The finished file, in order</a></h3>
+<p>You’ve written <code>reference.ts</code> in pieces. Top to bottom, the file is:
+the error class, the three interfaces and the <code>Reference</code> type, the
+three default constants, the three patterns, <code>looksLikeRegistry</code>,
+<code>splitRegistry</code>, <code>extractDigest</code>, <code>extractTag</code>, <code>parseReference</code>, and
+<code>target</code>. Things a function
+uses come before the function, so the file reads top-down without
+jumping ahead.</p>
+<h2 id="the-rest-of-the-tests"><a class="header" href="#the-rest-of-the-tests">The rest of the tests</a></h2>
+<p>Replace <code>src/reference.test.ts</code> with:</p>
+<pre><code class="language-ts">import { describe, expect, it } from "vitest"
+import { InvalidReferenceError, parseReference, target } from "./reference.ts"
+
+describe("parseReference", () =&gt; {
+  it("fills in Docker Hub's defaults for a bare name", () =&gt; {
+    // toEqual: the WHOLE object must match, every field.
+    expect(parseReference("alpine")).toEqual({
+      kind: "tag",
+      registry: "docker.io",
+      repository: "library/alpine",
+      tag: "latest",
+    })
+  })
+
+  it("keeps an explicit tag", () =&gt; {
+    // toMatchObject: only the fields listed must match; others are ignored.
+    expect(parseReference("alpine:3.20")).toMatchObject({
+      repository: "library/alpine",
+      tag: "3.20",
+    })
+  })
+
+  it("does not add library/ to a user's own repository", () =&gt; {
+    expect(parseReference("rijojohn85/oci-pull:v1")).toMatchObject({
+      registry: "docker.io",
+      repository: "rijojohn85/oci-pull",
+    })
+  })
+
+  // it.each runs the same test once per row. Each row's values become
+  // the function's parameters. %s in the name is replaced by the first value.
+  it.each([
+    ["ghcr.io/astral-sh/uv:latest", "ghcr.io", "astral-sh/uv"],
+    ["localhost:5000/dev/app:v2", "localhost:5000", "dev/app"], // colon = port
+    ["registry.example.com:5000/team/app", "registry.example.com:5000", "team/app"],
+  ])("splits the registry out of %s", (input, registry, repository) =&gt; {
+    // { registry, repository } = { registry: registry, repository: repository }
+    expect(parseReference(input)).toMatchObject({ registry, repository })
+  })
+
+  it("reads a digest reference", () =&gt; {
+    const ref = parseReference(
+      "alpine@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc",
+    )
+    expect(ref).toEqual({
+      kind: "digest",
+      registry: "docker.io",
+      repository: "library/alpine",
+      digest: "sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc",
+    })
+  })
+
+  it("prefers the digest when both a tag and a digest are given", () =&gt; {
+    const ref = parseReference(
+      "alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc",
+    )
+    expect(ref.kind).toBe("digest") // toBe: plain === comparison
+  })
+
+  // %j prints the value JSON-quoted, so the empty string shows as "".
+  it.each([
+    ["", "the name is empty"],
+    ["alpine:", "is not a valid tag"],
+    ["alpine@sha256:xyz", "is not a valid digest"],
+    ["Alpine", "is not a valid repository name"], // uppercase not allowed
+  ])("rejects %j", (input, problem) =&gt; {
+    // expect() gets a FUNCTION here, `() =&gt; ...`, so it can call it and
+    // catch the throw. Passing parseReference(input) directly would throw
+    // before expect() ever ran.
+    expect(() =&gt; parseReference(input)).toThrow(InvalidReferenceError) // right kind
+    expect(() =&gt; parseReference(input)).toThrow(problem) // message contains this
+  })
+})
+
+describe("target", () =&gt; {
+  it("is the tag for a tagged reference", () =&gt; {
+    expect(target(parseReference("alpine:3.20"))).toBe("3.20")
+  })
+
+  it("is the digest for a digested reference", () =&gt; {
+    // "a".repeat(64) builds a 64-character string of a's: a fake but valid digest.
+    expect(target(parseReference("alpine@sha256:" + "a".repeat(64)))).toBe(
+      "sha256:" + "a".repeat(64),
+    )
+  })
+})
+</code></pre>
+<p>Four things here are new:</p>
+<ul>
+<li><strong><code>toMatchObject</code></strong> checks only the fields you list, where <code>toEqual</code>
+demands the whole object match. Use it when a test cares about two
+fields out of four; the test then won’t break when an unrelated field
+changes.</li>
+<li><strong><code>it.each([...])</code></strong> runs the same test body once per row, filling in
+the parameters. <code>%s</code> and <code>%j</code> in the name are placeholders for the
+row’s values (plain, and JSON-quoted). This is how you test six
+inputs without six near-identical copies of the same test — the
+“write it once” rule, applied to tests.</li>
+<li><strong><code>expect(() =&gt; ...).toThrow(X)</code></strong> needs a function, not a
+value. If you wrote <code>expect(parseReference("")).toThrow(...)</code>,
+the throw would happen while building the argument and the test would
+error out instead of passing. Wrapping it in <code>() =&gt;</code> hands <code>expect</code> a
+function it can call and watch.</li>
+<li><strong><code>toThrow(SomeErrorClass)</code></strong> checks the kind; passing a string
+instead checks that the message <em>contains</em> it. We assert both, so a
+future refactor can’t quietly change either.</li>
+</ul>
+<p>Why these particular cases? Each one is a rule from the grammar that a
+naive implementation gets wrong: the <code>library/</code> prefix (only for
+single-word Hub repositories), the dot/colon/localhost rule, a colon
+that’s a port rather than a tag, digest winning over tag, and the four
+inputs that must be rejected rather than silently accepted. That’s the
+standard to hold tests to — one per rule that could plausibly break,
+not one per line of code.</p>
+<pre><code>$ npm run check
+</code></pre>
+<pre><code> Test Files  1 passed (1)
+      Tests  14 passed (14)
+</code></pre>
+<h3 id="what-a-failure-looks-like"><a class="header" href="#what-a-failure-looks-like">What a failure looks like</a></h3>
+<p>Worth seeing once, since you’ll be reading these for the rest of the
+book. Change the first test to expect <code>"alpine"</code> instead of
+<code>"library/alpine"</code> and run again:</p>
+<pre><code> FAIL  src/reference.test.ts &gt; parseReference &gt; fills in Docker Hub's defaults for a bare name
+AssertionError: expected { kind: 'tag', …(3) } to deeply equal { kind: 'tag', …(3) }
+
+- Expected
++ Received
+
+-   "repository": "alpine",
++   "repository": "library/alpine",
+</code></pre>
+<p><code>- Expected</code> is what the test asked for, <code>+ Received</code> is what the code
+produced, and only the differing lines are shown. Put it back.</p>
+<h2 id="wire-it-into-the-program"><a class="header" href="#wire-it-into-the-program">Wire it into the program</a></h2>
+<p><code>src/main.ts</code> becomes:</p>
+<pre><code class="language-ts">import { InvalidReferenceError, parseReference, target } from "./reference.ts"
+
+export function usage(): string {
+  return "usage: oci-pull &lt;image&gt; &lt;output-dir&gt;"
+}
+
+// Returns an exit code instead of exiting, so it can be tested.
+export function main(argv: string[]): number {
+  // Pull the first two elements out of the array into two names.
+  // Each is `string | undefined`: the array might be shorter than two.
+  const [image, outputDir] = argv
+  // Checking the values (not argv.length) teaches the compiler that
+  // both are plain strings from here on.
+  if (image === undefined || outputDir === undefined) {
+    console.error(usage()) // console.error writes to stderr
+    return 2
+  }
+
+  try {
+    const ref = parseReference(image)
+    console.log(`registry   ${ref.registry}`)
+    console.log(`repository ${ref.repository}`)
+    // Pick the label from `kind`, then let target() pick the value.
+    console.log(`${ref.kind === "tag" ? "tag       " : "digest    "} ${target(ref)}`)
+    console.log(`would pull into ${outputDir}`)
+    return 0
+  } catch (err) {
+    // A caught value's type is `unknown`: anything can be thrown.
+    // instanceof checks it, and inside the if it's our error type.
+    if (err instanceof InvalidReferenceError) {
+      console.error(err.message)
+      return 1 // the user typed a bad name
+    }
+    throw err // not ours: re-throw rather than hide a real bug
+  }
+}
+</code></pre>
+<p>Two changes from Chapter 2 worth explaining.</p>
+<p>The argument check is now <code>image === undefined || outputDir === undefined</code>
+rather than <code>argv.length !== 2</code>. Both are correct at run time, but only
+the first convinces the compiler: <code>noUncheckedIndexedAccess</code> (Chapter
+2) types <code>argv[0]</code> as “string or missing,” and checking <code>length</code> doesn’t
+teach it otherwise. Checking the values themselves does, so <code>image</code> is
+a plain <code>string</code> from that line on. This is the narrowing idea from
+Chapter 2.5 section 2 — an ordinary <code>if</code> shrinking a type — turning up
+in real code for the first time.</p>
+<p>And the <code>catch</code> re-throws anything that isn’t ours. Chapter 2.5 section
+5: a caught value is <code>unknown</code>, because anything can be thrown, so you
+check with <code>instanceof</code> before using it. Swallowing unknown errors is
+how a program ends up printing “something went wrong” for a bug it
+could have crashed loudly on.</p>
+<p>Try it:</p>
+<pre><code>$ npm start -- alpine ./rootfs
+</code></pre>
+<pre><code>registry   docker.io
+repository library/alpine
+tag        latest
+would pull into ./rootfs
+</code></pre>
+<p>(The bare <code>--</code> separates npm’s own arguments from your program’s.)</p>
+<pre><code>$ npm start -- ghcr.io/astral-sh/uv:0.4.0 ./rootfs
+</code></pre>
+<pre><code>registry   ghcr.io
+repository astral-sh/uv
+tag        0.4.0
+</code></pre>
+<pre><code>$ npm start -- alpine@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc ./rootfs
+</code></pre>
+<pre><code>registry   docker.io
+repository library/alpine
+digest     sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
+</code></pre>
+<p>And a bad one:</p>
+<pre><code>$ npm start --silent -- Alpine ./rootfs
+$ echo $?
+</code></pre>
+<pre><code>invalid image reference "Alpine": "Alpine" is not a valid repository name
+1
+</code></pre>
+<p>The exit code survives: <code>main</code> returned <code>1</code>, <code>cli.ts</code> put it in
+<code>process.exitCode</code>, Node exited with it, and npm passed it along.
+<code>--silent</code> just hides npm’s own two lines of “here’s the command I’m
+running” so the output above is only our program’s.</p>
+<h2 id="commit"><a class="header" href="#commit">Commit</a></h2>
+<pre><code>$ npm run check
+$ git add -A
+$ git commit -m "Parse image references"
+</code></pre>
+<h2 id="what-you-should-now-be-able-to-answer"><a class="header" href="#what-you-should-now-be-able-to-answer">What you should now be able to answer</a></h2>
+<ul>
+<li>What are the four parts of an image name, and which are optional?</li>
+<li>What three defaults does a bare <code>alpine</code> pick up?</li>
+<li>How do you tell a registry from the first part of a repository?</li>
+<li>Why is <code>Reference</code> a union of two interfaces instead of one interface
+with two optional fields?</li>
+<li>What does the <code>kind</code> field do, and what happens if you forget a
+<code>case</code>?</li>
+<li>Why does <code>localhost:5000/dev/app</code> have no tag?</li>
+<li>Why do <code>extractDigest</code> and <code>extractTag</code> both return the leftover
+string, and what broke when one of them didn’t?</li>
+<li>Why does <code>parseReference</code> need no <code>let</code> at all?</li>
+<li>Why does <code>parseReference</code> throw its own error class instead of a
+plain <code>Error</code>?</li>
+<li>Why is <code>expect(() =&gt; parseReference("")).toThrow(...)</code> wrapped
+in a function?</li>
+<li>Why did <code>argv.length !== 2</code> have to become a check on the values?</li>
+</ul>
+<h2 id="next-chapter"><a class="header" href="#next-chapter">Next chapter</a></h2>
+<p>Chapter 4 makes the first real HTTP call — to <code>/v2/</code>, the front door
+from Chapter 1, which answers <code>401</code> and tells us where to get a token.
+That means <code>fetch</code>, <code>async</code>/<code>await</code> for real, and a problem: a test
+that talks to Docker Hub is slow, needs the internet, and fails when
+Docker Hub is down. The answer is the pattern from Chapter 2.5 section
+8 — the piece asks for what it needs instead of making it — and it’s
+what makes every test in the rest of this book run in milliseconds with
+the network unplugged.</p>
 
                     </main>
 

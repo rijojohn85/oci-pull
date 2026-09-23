@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-a144fdc2.js";
+            window.path_to_searchindex_js = "searchindex-d0daebb5.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-b48846b6.js"></script>
@@ -174,7 +174,604 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="typescript-for-go-and-python-programmers"><a class="header" href="#typescript-for-go-and-python-programmers">TypeScript for Go and Python Programmers</a></h1>
+                        <h1 id="chapter-25-typescript-for-go-and-python-programmers"><a class="header" href="#chapter-25-typescript-for-go-and-python-programmers">Chapter 2.5: TypeScript for Go and Python Programmers</a></h1>
+<p>Just enough to make Chapter 3 make sense — not a full language book.
+This chapter goes slower than the rest, on purpose. Nothing here goes
+into the project; every snippet is a throwaway you can try in a
+scratch file (<code>src/scratch.ts</code>, run with <code>node src/scratch.ts</code>, check
+with <code>npm run typecheck</code>, delete when done). Every error message below
+is real — copied from <code>tsc</code> 7.0.2, not paraphrased — because reading
+the compiler’s actual words is half of learning the language.</p>
+<p>You know Go and Python. So instead of “what is a function,” each
+section asks: <em>what’s different here?</em> Nine differences, plus a note on semicolons first. Then Chapter
+3 starts building.</p>
+<h2 id="0-semicolons-optional-with-one-catch"><a class="header" href="#0-semicolons-optional-with-one-catch">0. Semicolons: optional, with one catch</a></h2>
+<p>This book writes no semicolons at line ends. JavaScript inserts them
+itself at each line break, just as Go’s compiler does, and Python never
+had them. So this works:</p>
+<pre><code class="language-ts">const a = 1
+const b = 2
+console.log(a + b) // 3
+</code></pre>
+<p>The catch: a line that <em>starts</em> with <code>[</code>, <code>(</code> or a backtick gets glued
+onto the line above it, because a line ending in a value followed by
+<code>[</code> looks like “index into that value”:</p>
+<pre><code class="language-ts">const x = "tag"
+[1, 2].forEach((n) =&gt; console.log(n))
+</code></pre>
+<p>JavaScript reads that as <code>const x = "tag"[1, 2].forEach(...)</code> and it
+crashes:</p>
+<pre><code>[1, 2].forEach((n) =&gt; console.log(n))
+       ^
+</code></pre>
+<p>The rule: <strong>if a statement starts with <code>[</code>, <code>(</code> or a backtick, put a <code>;</code>
+in front of it</strong>:</p>
+<pre><code class="language-ts">const x = "tag"
+;[1, 2].forEach((n) =&gt; console.log(n))
+</code></pre>
+<p>It comes up rarely, and this project never needs it. Lines <em>inside</em> a
+list or a function call (after an opening <code>[</code>, <code>(</code> or a <code>,</code>) are fine.
+The problem is only a new statement that starts with one of those
+characters.</p>
+<h2 id="1-a-type-is-a-shape-not-a-name"><a class="header" href="#1-a-type-is-a-shape-not-a-name">1. A type is a shape, not a name</a></h2>
+<p>In Go, two structs with identical fields are two different types. You
+can’t pass a <code>Location{X, Y}</code> where a <code>Point{X, Y}</code> is expected without
+converting. The <em>name</em> is what matters.</p>
+<p>TypeScript is the other way round. A type describes a <em>shape</em> — “has a
+number called <code>x</code> and a number called <code>y</code>” — and anything with that
+shape fits, whatever it was called when it was made:</p>
+<pre><code class="language-ts">interface Point {
+  x: number
+  y: number
+}
+
+function distance(p: Point): number {
+  return Math.sqrt(p.x * p.x + p.y * p.y)
+}
+
+const spot = { x: 3, y: 4, label: "home" }
+console.log(distance(spot)) // 5
+</code></pre>
+<p><code>spot</code> was never declared as a <code>Point</code>. It has an extra field. It
+still fits, because it has an <code>x</code> and a <code>y</code> that are numbers. This is
+the same idea as Go’s interfaces — “if it has the methods, it
+satisfies the interface, no <code>implements</code> keyword” — applied to <em>every</em>
+type, fields included. Python’s duck typing, checked before the
+program runs.</p>
+<p><code>interface</code> is the keyword for describing an object’s shape. There’s
+also <code>type</code>, which can name <em>any</em> type, including ones that aren’t
+objects (you’ll see it in section 4). For object shapes they’re
+interchangeable; this book uses <code>interface</code> for objects and <code>type</code> for
+everything else.</p>
+<p>One wrinkle. Write the object <em>directly</em> in the call — braces right
+there — and the extra field is suddenly an error:</p>
+<pre><code class="language-ts">console.log(distance({ x: 1, y: 2, label: "inline" }))
+</code></pre>
+<pre><code>error TS2353: Object literal may only specify known properties, and 'label' does not exist in type 'Point'.
+</code></pre>
+<p>Same shape as <code>spot</code>, opposite answer. The difference is what the
+compiler can infer about your intent:</p>
+<ul>
+<li><code>spot</code> has a life of its own. It’s in a variable, it may be passed to
+five other functions, and <code>label</code> is presumably for one of them.
+Extra fields are none of <code>distance</code>’s business.</li>
+<li>The second object is born at the call and dies there. Nobody else
+will ever see it. So a field the parameter doesn’t mention has no
+reason to exist — it’s either dead weight or, far more likely, a
+mistake.</li>
+</ul>
+<p>That second case is worth catching, and here’s the example that shows
+why:</p>
+<pre><code class="language-ts">interface Options {
+  timeout?: number
+}
+
+function connect(o: Options): void { /* ... */ }
+
+connect({ timeeout: 5000 })
+</code></pre>
+<p>Every field of <code>Options</code> is optional, so <code>{ timeeout: 5000 }</code> really
+does satisfy the shape — <code>{}</code> would too. By shape rules alone this
+compiles, and your timeout is silently ignored forever. Instead:</p>
+<pre><code>error TS2561: Object literal may only specify known properties, but 'timeeout' does not exist in type 'Options'. Did you mean to write 'timeout'?
+</code></pre>
+<p>The compiler even names the typo. This extra rule is called the
+<strong>excess property check</strong>, and it fires only when an object literal is
+written directly where a type is expected — as an argument, or
+assigned to a typed variable:</p>
+<pre><code class="language-ts">const a: Point = { x: 1, y: 2, label: "nope" }
+</code></pre>
+<pre><code>error TS2353: Object literal may only specify known properties, and 'label' does not exist in type 'Point'.
+</code></pre>
+<p>Give the object a name first and the check doesn’t apply, because now
+it’s a value with its own life, not a literal. That’s not a loophole to
+feel clever about — it’s the same distinction, and if you genuinely
+want to pass an object with extras, naming it says so out loud.</p>
+<h2 id="2-types-are-gone-when-the-program-runs"><a class="header" href="#2-types-are-gone-when-the-program-runs">2. Types are gone when the program runs</a></h2>
+<p>Chapter 2 showed this with a test that passed despite a type error.
+Here’s why it matters for a program that talks to a server.</p>
+<p><code>JSON.parse</code> turns text into a value. What type does it return? It
+can’t know — the text could be anything. So it returns <code>unknown</code>:</p>
+<pre><code class="language-ts">const raw: unknown = JSON.parse('{"size": 3630321}')
+console.log(raw.size)
+</code></pre>
+<pre><code>error TS18046: 'raw' is of type 'unknown'.
+</code></pre>
+<p><code>unknown</code> means “there is a value here and I know nothing about it.”
+You can’t read a field, call a method, or add one to it. You have to
+<em>look first</em>:</p>
+<pre><code class="language-ts">if (typeof raw === "object" &amp;&amp; raw !== null &amp;&amp; "size" in raw &amp;&amp; typeof raw.size === "number") {
+  console.log(raw.size + 1) // 3630322
+}
+</code></pre>
+<p>Inside that <code>if</code>, TypeScript has followed the checks and knows <code>raw</code>
+has a numeric <code>size</code>. This is called <strong>narrowing</strong> — starting from a
+wide type and using ordinary <code>if</code> checks to shrink it. It’s how
+TypeScript deals with the fact that the type is only ever a claim about
+run-time data, never a guarantee. (The chain of <code>typeof</code> checks is
+ugly, and Chapter 6 replaces it with <code>zod</code>, which does the same thing
+declaratively. But this is what’s underneath.)</p>
+<p>There’s a second option, <code>any</code>, which means “don’t check anything”:</p>
+<pre><code class="language-ts">const loose: any = JSON.parse('{"size": 3630321}')
+console.log(loose.sizee.toFixed(2))
+</code></pre>
+<p><code>tsc</code> says nothing. <code>sizee</code> is a typo. At run time:</p>
+<pre><code>TypeError: Cannot read properties of undefined (reading 'toFixed')
+</code></pre>
+<p><code>any</code> switches TypeScript off for that value and everything derived
+from it. You’ll see it in older code and in quick scripts. In this
+project it never appears; <code>unknown</code> plus a check is always the answer.
+Think of it as <code>interface{}</code> in Go: you <em>can</em> hold anything, but you
+have to type-assert before use — and TypeScript won’t let you skip
+that step, where Go will let you panic.</p>
+<h2 id="3-undefined-null-and-the--family"><a class="header" href="#3-undefined-null-and-the--family">3. <code>undefined</code>, <code>null</code>, and the <code>?</code> family</a></h2>
+<p>Go has one “nothing” (<code>nil</code>) and Python has one (<code>None</code>). JavaScript
+has two, for historical reasons:</p>
+<ul>
+<li><code>undefined</code> — “was never set.” A missing field, a missing argument,
+an array index past the end.</li>
+<li><code>null</code> — “was set, deliberately, to nothing.” What <code>JSON.parse</code>
+gives for the JSON value <code>null</code>.</li>
+</ul>
+<p>You’ll write <code>undefined</code> far more often. A field that might be absent
+is marked with <code>?</code>:</p>
+<pre><code class="language-ts">interface Layer {
+  digest: string
+  size: number
+  annotations?: Record&lt;string, string&gt;
+}
+</code></pre>
+<p><code>Record&lt;string, string&gt;</code> is “an object used as a dictionary: string
+keys, string values” — Go’s <code>map[string]string</code>. The <code>?</code> makes
+<code>annotations</code> optional, which means its type is really “a record, <em>or</em>
+<code>undefined</code>.” Try to use it without checking:</p>
+<pre><code class="language-ts">function firstAnnotation(layer: Layer): string {
+  return Object.keys(layer.annotations)[0]
+}
+</code></pre>
+<pre><code>error TS2769: ... Argument of type 'Record&lt;string, string&gt; | undefined' is not assignable to parameter of type 'object'.
+error TS2322: Type 'string | undefined' is not assignable to type 'string'.
+</code></pre>
+<p>Two errors. The first: <code>annotations</code> might be <code>undefined</code>. The second:
+even if it isn’t, <code>[0]</code> on an array might be past the end — that’s
+<code>noUncheckedIndexedAccess</code> from Chapter 2 doing its job. Both are
+fixed with <code>??</code>, which reads “or, if that’s missing”:</p>
+<pre><code class="language-ts">function firstAnnotation(layer: Layer): string {
+  const keys = Object.keys(layer.annotations ?? {})
+  return keys[0] ?? "(none)"
+}
+</code></pre>
+<p>Two related operators you’ll use constantly:</p>
+<ul>
+<li><code>a ?? b</code> — <code>a</code>, unless it’s <code>undefined</code>/<code>null</code>, then <code>b</code>.</li>
+<li><code>a?.b</code> — <code>a.b</code>, unless <code>a</code> is <code>undefined</code>/<code>null</code>, then <code>undefined</code>
+(instead of crashing).</li>
+</ul>
+<h3 id="-and-why-never-"><a class="header" href="#-and-why-never-"><code>===</code>, and why never <code>==</code></a></h3>
+<p>JavaScript has two equality operators. <code>===</code> compares what’s there.
+<code>==</code> converts one side to the other’s type first, and the conversion
+rules are their own small horror:</p>
+<pre><code>0 == ""              true      0 === ""             false
+"5" == 5             true      "5" === 5            false
+null == undefined    true      null === undefined   false
+0 == false           true
+"" == false          true
+[] == false          true
+null == 0            false     ← but null == undefined was true
+</code></pre>
+<p>That last line is the point: the rules aren’t consistent even with each
+other. Nobody memorises this; people just get bitten.</p>
+<p><strong>Always write <code>===</code> and <code>!==</code>.</strong> Go’s <code>==</code> already behaves this way.
+Python’s sits in between — it converts across numbers (<code>1 == 1.0</code> is
+true) but refuses <code>"5" == 5</code>.</p>
+<p>TypeScript catches the obvious mistakes for you:</p>
+<pre><code class="language-ts">const s = "5"
+const n = 5
+console.log(s == n)
+</code></pre>
+<pre><code>error TS2367: This comparison appears to be unintentional because the types 'string' and 'number' have no overlap.
+</code></pre>
+<p>— but only when it knows both types. Make one of them <code>any</code> and the
+comparison compiles and prints <code>true</code>. Same lesson as section 2.</p>
+<p>One <code>==</code> is idiomatic rather than a mistake: <code>x == null</code> is true for
+both <code>null</code> and <code>undefined</code>, so it’s the short way to ask “is there
+nothing here?” This project writes <code>x === undefined</code>, because our own
+code never produces <code>null</code> — but you’ll meet <code>== null</code> in code that
+handles JSON, and it’s deliberate there.</p>
+<p>And the thing you already met in Chapter 2’s <code>main</code>:</p>
+<pre><code class="language-ts">const argv = ["alpine:3.20"]
+const image = argv[0]
+console.log(image.toUpperCase())
+</code></pre>
+<pre><code>error TS18048: 'image' is possibly 'undefined'.
+</code></pre>
+<p><code>argv[0]</code> might not exist. TypeScript won’t let you pretend otherwise.
+Every one of these errors is a <code>nil</code> dereference that didn’t happen in
+production.</p>
+<h2 id="4-one-of-these-union-types"><a class="header" href="#4-one-of-these-union-types">4. “One of these”: union types</a></h2>
+<p>Go has no direct way to say “this value is exactly one of these three
+strings” — you’d use constants and hope. TypeScript does:</p>
+<pre><code class="language-ts">type Arch = "amd64" | "arm64" | "riscv64"
+
+function goName(arch: Arch): string {
+  return arch
+}
+
+goName("amd64")
+goName("x86_64")
+</code></pre>
+<pre><code>error TS2345: Argument of type '"x86_64"' is not assignable to parameter of type 'Arch'.
+</code></pre>
+<p>The <code>|</code> reads “or.” This is what replaces <code>enum</code> (which Chapter 2
+forbade), and it’s better: the values are plain strings, so they read
+naturally in JSON, in logs, and in tests.</p>
+<p>It works for objects too, and this is where it earns its keep. Recall
+from Chapter 1: ask for a tag, get back <em>either</em> an index <em>or</em> a
+manifest. Write that down:</p>
+<pre><code class="language-ts">interface Manifest {
+  mediaType: "application/vnd.oci.image.manifest.v1+json"
+  layers: { digest: string; size: number }[]
+}
+
+interface Index {
+  mediaType: "application/vnd.oci.image.index.v1+json"
+  manifests: { digest: string; platform: { architecture: string } }[]
+}
+
+type ManifestOrIndex = Manifest | Index
+</code></pre>
+<p>Note <code>mediaType</code> isn’t typed as <code>string</code> — it’s typed as <em>one exact
+string</em>. That’s allowed, and it’s the trick: the two shapes share a
+field whose value tells you which one you’re holding. Now try to use
+<code>layers</code> without looking:</p>
+<pre><code class="language-ts">function describe(doc: ManifestOrIndex): string {
+  return `${doc.layers.length} layers`
+}
+</code></pre>
+<pre><code>error TS2339: Property 'layers' does not exist on type 'ManifestOrIndex'.
+  Property 'layers' does not exist on type 'Index'.
+</code></pre>
+<p>Correct — it might be an index. Look at <code>mediaType</code> first, and the
+compiler follows along:</p>
+<pre><code class="language-ts">function describe(doc: ManifestOrIndex): string {
+  switch (doc.mediaType) {
+    case "application/vnd.oci.image.manifest.v1+json":
+      return `${doc.layers.length} layers`
+    case "application/vnd.oci.image.index.v1+json":
+      return `${doc.manifests.length} platforms`
+  }
+}
+</code></pre>
+<p>Inside the first <code>case</code>, <code>doc</code> is a <code>Manifest</code> and <code>.layers</code> is fine.
+Inside the second, it’s an <code>Index</code>. Delete the second <code>case</code> and:</p>
+<pre><code>error TS2366: Function lacks ending return statement and return type does not include 'undefined'.
+</code></pre>
+<p>— the compiler noticed a shape you forgot to handle. Add a third shape
+to the union next year, and every <code>switch</code> that doesn’t handle it
+fails to compile. That is the safety Go’s type switches don’t give
+you, and the pattern Chapter 6 uses to tell index from manifest.</p>
+<h2 id="5-errors-throw-catch-and-your-own-error-types"><a class="header" href="#5-errors-throw-catch-and-your-own-error-types">5. Errors: <code>throw</code>, <code>catch</code>, and your own error types</a></h2>
+<p>TypeScript uses exceptions, like Python, not returned errors, like Go.
+<code>throw</code> anything; <code>catch</code> it with <code>try</code>. The one rule this project
+follows: <strong>only throw <code>Error</code> objects</strong>, and make your own kinds by
+extending <code>Error</code>:</p>
+<pre><code class="language-ts">class DigestMismatchError extends Error {
+  readonly expected: string
+  readonly actual: string
+
+  constructor(expected: string, actual: string) {
+    super(`digest mismatch: expected ${expected}, got ${actual}`)
+    this.name = "DigestMismatchError"
+    this.expected = expected
+    this.actual = actual
+  }
+}
+
+function verify(expected: string, actual: string): void {
+  if (expected !== actual) {
+    throw new DigestMismatchError(expected, actual)
+  }
+}
+</code></pre>
+<p><code>super(...)</code> calls <code>Error</code>’s own constructor with the message. Setting
+<code>this.name</code> makes stack traces say <code>DigestMismatchError</code> instead of
+<code>Error</code>. <code>readonly</code> is Go’s “no setter” — assign once in the
+constructor, never again.</p>
+<p>Now catch it. What type is the caught value?</p>
+<pre><code class="language-ts">try {
+  verify("sha256:aaa", "sha256:bbb")
+} catch (err) {
+  console.log(err.message)
+}
+</code></pre>
+<pre><code>error TS18046: 'err' is of type 'unknown'.
+</code></pre>
+<p><code>unknown</code> — because <em>anything</em> can be thrown, so the compiler
+honestly doesn’t know. Same rule as section 2: look first.
+<code>instanceof</code> is the check:</p>
+<pre><code class="language-ts">} catch (err) {
+  if (err instanceof DigestMismatchError) {
+    console.log(err.name, "-&gt;", err.expected, "vs", err.actual)
+  } else {
+    throw err
+  }
+}
+</code></pre>
+<pre><code>DigestMismatchError -&gt; sha256:aaa vs sha256:bbb
+</code></pre>
+<p>Inside the <code>if</code>, <code>err</code> is narrowed to <code>DigestMismatchError</code> and its
+fields are available. Anything you didn’t expect gets re-thrown rather
+than swallowed — the equivalent of Go’s <code>errors.As</code> plus “return the
+error if it’s not the one you handle.”</p>
+<h2 id="6-asyncawait-whats-actually-different-from-go"><a class="header" href="#6-asyncawait-whats-actually-different-from-go">6. <code>async</code>/<code>await</code>: what’s actually different from Go</a></h2>
+<p>This is the one that trips Go programmers most, so it gets the longest
+section.</p>
+<p>In Go, <code>go f()</code> starts <code>f</code> on another goroutine and the runtime may run
+it <em>in parallel</em> on another CPU. In Node, <strong>there is one thread running
+your code</strong>. Nothing you write runs at the same time as anything else
+you write. What Node does have is a way to say “this will take a while
+— go do something else and come back when it’s ready.” That’s
+<code>async</code>/<code>await</code>, and it’s much closer to Python’s <code>asyncio</code> than to
+goroutines.</p>
+<p>A function marked <code>async</code> returns a <strong>Promise</strong> — a box that will hold
+a value later. <code>await</code> opens the box, pausing <em>this function only</em>
+until the value arrives; other work keeps going in the meantime.</p>
+<pre><code class="language-ts">function sleep(ms: number): Promise&lt;void&gt; {
+  return new Promise((resolve) =&gt; setTimeout(resolve, ms))
+}
+
+async function download(name: string, ms: number): Promise&lt;string&gt; {
+  console.log(`start ${name}`)
+  await sleep(ms)
+  console.log(`done  ${name}`)
+  return `${name}: ${ms}ms`
+}
+</code></pre>
+<p>(<code>sleep</code> wraps Node’s <code>setTimeout</code> — “call this function after <code>ms</code>
+milliseconds” — into a Promise so it can be awaited. You’ll write this
+helper once in Chapter 8 and never think about it again. <code>Promise&lt;void&gt;</code>
+is “a promise of nothing,” <code>Promise&lt;string&gt;</code> “a promise of a string”;
+the angle brackets are the same idea as Go’s <code>chan string</code>.)</p>
+<p>One at a time:</p>
+<pre><code class="language-ts">async function oneAtATime(): Promise&lt;void&gt; {
+  const t0 = Date.now()
+  const a = await download("layer-1", 300)
+  const b = await download("layer-2", 300)
+  console.log([a, b], `${Date.now() - t0}ms total`)
+}
+</code></pre>
+<pre><code>start layer-1
+done  layer-1
+start layer-2
+done  layer-2
+[ 'layer-1: 300ms', 'layer-2: 300ms' ] 607ms total
+</code></pre>
+<p>600 ms, because each <code>await</code> waited for the previous download before
+starting the next. Now start both, <em>then</em> wait:</p>
+<pre><code class="language-ts">async function allAtOnce(): Promise&lt;void&gt; {
+  const t0 = Date.now()
+  const results = await Promise.all([download("layer-1", 300), download("layer-2", 300)])
+  console.log(results, `${Date.now() - t0}ms total`)
+}
+</code></pre>
+<pre><code>start layer-1
+start layer-2
+done  layer-1
+done  layer-2
+[ 'layer-1: 300ms', 'layer-2: 300ms' ] 302ms total
+</code></pre>
+<p>300 ms. Calling <code>download(...)</code> <em>without</em> <code>await</code> starts it and hands
+back the box immediately. <code>Promise.all</code> takes a list of boxes and gives
+you one box that opens when all of them have. That’s <code>sync.WaitGroup</code>
+plus collecting the results, in one line — and it’s how Chapter 8
+downloads every layer at once.</p>
+<p>Two things worth knowing now:</p>
+<p><strong>Only <code>async</code> functions can <code>await</code>.</strong> If you need to wait inside an
+ordinary function, make it <code>async</code> — and then its callers must <code>await</code>
+it, and so on up. This “spreads” through a codebase. That’s normal and
+expected; most of this project’s functions will be <code>async</code>, because
+most of them wait on the network or the disk.</p>
+<p><strong>Forgetting <code>await</code> is the classic bug</strong>, and TypeScript catches most
+of it:</p>
+<pre><code class="language-ts">async function fetchSize(): Promise&lt;number&gt; {
+  return 3630321
+}
+
+const size = fetchSize()
+console.log(size + 1)
+</code></pre>
+<pre><code>error TS2365: Operator '+' cannot be applied to types 'Promise&lt;number&gt;' and '1'.
+</code></pre>
+<p>Without the type check, this prints <code>[object Promise]1</code>. With it, the
+compiler tells you you’re holding a box, not a number.</p>
+<p>Finally: when something inside an <code>async</code> function throws, the Promise
+“rejects,” and <code>await</code>ing it re-throws at the <code>await</code>. So <code>try</code>/<code>catch</code>
+around an <code>await</code> works exactly like <code>try</code>/<code>catch</code> around a normal call.
+No special error-handling story to learn.</p>
+<h2 id="7-modules-export-and-import-type"><a class="header" href="#7-modules-export-and-import-type">7. Modules, <code>export</code>, and <code>import type</code></a></h2>
+<p>A file is a module. Nothing leaves it unless marked <code>export</code>; nothing
+enters unless <code>import</code>ed. You saw both in Chapter 2. One extra rule,
+enforced by <code>verbatimModuleSyntax</code> from the tsconfig:</p>
+<pre><code class="language-ts">// types.ts
+export interface Reference {
+  readonly registry: string
+  readonly repository: string
+  readonly tag: string
+}
+export function parse(name: string): Reference { /* ... */ }
+
+// use.ts
+import { Reference, parse } from "./types.ts"
+</code></pre>
+<pre><code>error TS1484: 'Reference' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+</code></pre>
+<p><code>Reference</code> is a type. Types are deleted before the program runs
+(section 2). Node, doing that deletion, needs to know <em>which</em> imports
+to drop, so you have to say:</p>
+<pre><code class="language-ts">import { type Reference, parse } from "./types.ts"
+</code></pre>
+<p><code>type</code> in front of the name means “this one’s a type, delete it.”
+<code>parse</code> is a real function and stays. If <em>everything</em> you import from a
+file is a type, write <code>import type { ... } from</code>. The compiler tells
+you every time you forget, so there’s nothing to memorise.</p>
+<p>And since <code>Reference</code> is all <code>readonly</code>:</p>
+<pre><code class="language-ts">const ref: Reference = parse("alpine")
+ref.tag = "3.20"
+</code></pre>
+<pre><code>error TS2540: Cannot assign to 'tag' because it is a read-only property.
+</code></pre>
+<p>Most of this project’s data types will be <code>readonly</code> throughout. A
+value that can’t change after it’s made is a value you never have to
+wonder about.</p>
+<h2 id="8-classes-and-interfaces-the-way-this-book-uses-them"><a class="header" href="#8-classes-and-interfaces-the-way-this-book-uses-them">8. Classes and interfaces, the way this book uses them</a></h2>
+<p>You could write this whole tool with functions and plain objects. We’ll
+use a few classes, for one specific reason: a class can hold something
+it was <em>given</em> — an HTTP client, a clock, a folder path — and every
+method then uses it. That’s the shape that makes faking easy in tests.
+Here’s the pattern in miniature, with a clock:</p>
+<pre><code class="language-ts">interface Clock {
+  now(): number
+}
+
+class SystemClock implements Clock {
+  now(): number {
+    return Date.now()
+  }
+}
+
+class FakeClock implements Clock {
+  private current = 0
+
+  now(): number {
+    return this.current
+  }
+
+  advance(ms: number): void {
+    this.current += ms
+  }
+}
+
+class Stopwatch {
+  private readonly clock: Clock
+  private started = 0
+
+  constructor(clock: Clock) {
+    this.clock = clock
+  }
+
+  start(): void {
+    this.started = this.clock.now()
+  }
+
+  elapsed(): number {
+    return this.clock.now() - this.started
+  }
+}
+</code></pre>
+<p>Read it top to bottom:</p>
+<ul>
+<li>
+<p><code>interface Clock</code> describes what a clock <em>can do</em>, not how. This is a
+Go interface with one method.</p>
+</li>
+<li>
+<p><code>implements Clock</code> on a class is optional (section 1 — shape is what
+matters), but it makes the compiler check that the class really does
+have the method, right there, rather than at the first place it’s
+used. Cheap and worth it.</p>
+</li>
+<li>
+<p><code>private</code> means only code inside the class can touch the field. Try
+<code>fake.current</code> from outside and:</p>
+<pre><code>error TS2341: Property 'current' is private and only accessible within class 'FakeClock'.
+</code></pre>
+<p>Go does this with lowercase names; TypeScript with a keyword.</p>
+</li>
+<li>
+<p><code>Stopwatch</code> doesn’t make its own clock. It’s <em>given</em> one in the
+constructor and stores it. So in a test:</p>
+<pre><code class="language-ts">const fake = new FakeClock()
+const watch = new Stopwatch(fake)
+watch.start()
+fake.advance(250)
+console.log(watch.elapsed()) // 250
+</code></pre>
+<p>No real time passed. That’s the entire trick behind every fake in
+this book: <strong>a class asks for what it needs instead of making it, so
+a test can hand it a pretend version.</strong> The idea has a name —
+depending on an abstraction (the <code>Clock</code> interface) instead of a
+concrete thing (<code>Date.now</code>) — and it’ll be named again in Chapter 4
+when the thing being faked is the network.</p>
+</li>
+</ul>
+<p>One small thing you <em>can’t</em> do, because of <code>erasableSyntaxOnly</code>: the
+shorthand <code>constructor(private readonly clock: Clock) {}</code> that declares
+and assigns a field in one go. It’s a TypeScript-only feature that
+isn’t just a label, so Node can’t strip it. The three-line version
+above is what we write.</p>
+<h2 id="9-generics-briefly"><a class="header" href="#9-generics-briefly">9. Generics, briefly</a></h2>
+<p>You’ve already used them: <code>Promise&lt;string&gt;</code>, <code>Record&lt;string, string&gt;</code>,
+<code>Map&lt;string, number&gt;</code>. Angle brackets are “a type with a hole in it,
+and here’s what fills the hole.” Go got the same feature in 1.18 with
+the same square-bracket idea.</p>
+<p>Writing your own:</p>
+<pre><code class="language-ts">function first&lt;T&gt;(items: T[]): T | undefined {
+  return items[0]
+}
+
+const n = first([1, 2, 3])   // n: number | undefined
+const s = first(["a", "b"])  // s: string | undefined
+</code></pre>
+<p><code>T</code> is filled in from whatever you pass. Chapter 8 writes one generic
+function — the “run at most N of these at a time” limiter — and
+explains it fully then. Until then, you only need to read them.</p>
+<h2 id="what-you-should-now-be-able-to-answer"><a class="header" href="#what-you-should-now-be-able-to-answer">What you should now be able to answer</a></h2>
+<ul>
+<li>Why does an object with extra fields fit a type that doesn’t mention
+them — and why is the same object rejected when written directly in
+the call?</li>
+<li>What’s the difference between <code>unknown</code> and <code>any</code>, and which one does
+<code>JSON.parse</code> deserve?</li>
+<li>What does <code>?</code> after a field name mean? What do <code>??</code> and <code>?.</code> do?</li>
+<li>Why <code>===</code> and never <code>==</code>? What’s the one exception?</li>
+<li>Semicolons are optional. When does leaving one out break the code?</li>
+<li>How do you say “one of these three strings”? How does a <code>switch</code> on
+a shared field let the compiler know which shape you hold?</li>
+<li>Why is a caught error <code>unknown</code>, and how do you get at its fields?</li>
+<li>Does <code>async</code> code in Node run in parallel? What does <code>await</code> pause?
+What’s the difference between two <code>await</code>s in a row and
+<code>Promise.all</code>?</li>
+<li>Why must some imports say <code>type</code>?</li>
+<li>Why does <code>Stopwatch</code> take a <code>Clock</code> instead of calling <code>Date.now()</code>?</li>
+</ul>
+<h2 id="next-chapter"><a class="header" href="#next-chapter">Next chapter</a></h2>
+<p>Chapter 3 writes the first real piece: turning <code>alpine</code>,
+<code>alpine:3.20</code>, <code>ghcr.io/foo/bar:v1</code>, and <code>alpine@sha256:...</code> into one
+tidy <code>Reference</code> — registry, repository, tag-or-digest — filling in
+Docker Hub’s defaults exactly the way <code>docker pull</code> does. It’s a pure
+function with no network and no disk, which makes it the right place
+for the project’s first real tests, its first custom error, and its
+first use of everything in this chapter.</p>
 
                     </main>
 
