@@ -37,3 +37,13 @@
 - One chapter at a time. Write it, stop, user tries it, then next.
 - Check real interfaces before drafting (registry API, Node docs, zod,
   tar, vitest) — context7 first, then upstream source.
+
+## State (any agent, any tool)
+- Progress, decisions, and the exact next action live in `.book/state.md`.
+  Read it first; update it at every checkpoint and before stopping.
+- What's been shown in full vs "Your turn": `.book/concepts.md`.
+- Real captured output: `.book/captures/chNN/`. Scratch copy of the user's
+  code: `.book/scratch/` (gitignored). Never write in `oci-pull/`.
+- Workflow: the project-book skill
+  (https://github.com/rijojohn85/project-book-skill). If your agent can't
+  load skills, read `skills/project-book/SKILL.md` from that repo.
