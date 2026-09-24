@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-4dbaeaa2.js";
+            window.path_to_searchindex_js = "searchindex-97d040ea.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-b48846b6.js"></script>
@@ -174,7 +174,1139 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="getting-permission-tokens"><a class="header" href="#getting-permission-tokens">Getting Permission: Tokens</a></h1>
+                        <h1 id="chapter-5-getting-permission-tokens"><a class="header" href="#chapter-5-getting-permission-tokens">Chapter 5: Getting Permission: Tokens</a></h1>
+<p>Chapter 4 knocked on Docker Hub’s front door. It answered <code>401</code>, “not
+without a token,” and said where to get one. This chapter follows those
+directions. We read the challenge, ask the token server for a token,
+and try again with the token attached. Then we use it to fetch
+something real: the <strong>manifest</strong>, the small file that describes an
+image. Chapter 6 reads what’s inside it. This chapter just gets hold of
+it.</p>
+<p>The chapter also gives you a new testing tool. Our code now makes
+<em>several</em> calls in a row: first the registry, then the token server,
+then the registry again. So the fake has to answer differently each
+time it’s called. By the end, one test plays the whole conversation,
+<code>401</code> then token then manifest, in about a millisecond.</p>
+<p>New in this chapter: <code>Record</code>, optional parameters, <code>URL</code>, <code>unknown</code>,
+<code>Map</code>, named regex groups, <code>...</code> for copying and gathering, and
+<code>mockResolvedValueOnce</code>.</p>
+<h2 id="the-whole-dance-by-hand"><a class="header" href="#the-whole-dance-by-hand">The whole dance, by hand</a></h2>
+<p>Before writing code, do it with curl so you know exactly what the code
+has to do. It takes three requests.</p>
+<p><strong>1. Ask for the manifest.</strong> A manifest lives at
+<code>/v2/&lt;repository&gt;/manifests/&lt;tag&gt;</code>:</p>
+<pre><code>$ curl -sS -o /dev/null -D - https://registry-1.docker.io/v2/library/alpine/manifests/latest
+</code></pre>
+<pre><code>HTTP/2 401
+www-authenticate: Bearer realm="https://auth.docker.io/token",service="registry.docker.io",scope="repository:library/alpine:pull"
+</code></pre>
+<p>(Headers trimmed, as in Chapter 4.) The same <code>401</code> as the front door,
+but this challenge has three parts:</p>
+<ul>
+<li><strong><code>realm</code></strong>: the address of the token server. Not the registry
+itself, a separate service.</li>
+<li><strong><code>service</code></strong>: which registry the token is for. One token server can
+hand out tokens for several registries.</li>
+<li><strong><code>scope</code></strong>: what you’re asking permission to do.
+<code>repository:library/alpine:pull</code> means “pull from <code>library/alpine</code>.”
+The front door in Chapter 4 had no scope, because it wasn’t asking
+about any repository in particular.</li>
+</ul>
+<p><strong>2. Ask the token server.</strong> Send <code>service</code> and <code>scope</code> to the <code>realm</code>
+as <code>?key=value</code> parts of the address:</p>
+<pre><code>$ curl -sS "https://auth.docker.io/token?service=registry.docker.io&amp;scope=repository:library/alpine:pull"
+</code></pre>
+<pre><code>{"token":"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsIng1YyI6WyJNSUlFRmpDQ0F2NmdBd0lCQWdJVWN4aExGcUJEVDZuWWQzV1UvcjFMZXpGdGNOY3
+</code></pre>
+<p>That’s cut short. The whole reply is JSON with four fields: <code>token</code>
+(about 2,700 characters), <code>access_token</code> (the same token again, under
+an older name), <code>expires_in</code> (<code>300</code>, meaning five minutes), and
+<code>issued_at</code>. No password was asked for. Docker Hub hands out tokens for
+public images to anyone who asks. Asking still matters, because that’s
+how Docker Hub counts and limits anonymous pulls.</p>
+<p><strong>3. Try again, with the token.</strong> The token goes in an <code>Authorization</code>
+header, after the word <code>Bearer</code>. It’s too long to paste, so store it in
+a shell variable first. <code>node -p</code> runs one line of JavaScript and
+prints the result, which here is the <code>token</code> field of whatever came in
+on standard input:</p>
+<pre><code>$ TOKEN=$(curl -sS "https://auth.docker.io/token?service=registry.docker.io&amp;scope=repository:library/alpine:pull" \
+    | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).token')
+$ curl -sS -o /dev/null -D - \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "Accept: application/vnd.oci.image.index.v1+json" \
+    https://registry-1.docker.io/v2/library/alpine/manifests/latest
+</code></pre>
+<pre><code>HTTP/2 200
+content-type: application/vnd.oci.image.index.v1+json
+content-length: 9218
+docker-content-digest: sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
+</code></pre>
+<p>We’re in. Three headers matter:</p>
+<ul>
+<li><strong><code>content-type</code></strong> says what kind of manifest came back. This one is
+an <em>index</em>: a list of manifests, one per kind of CPU. Chapter 6 deals
+with that.</li>
+<li><strong><code>content-length</code></strong> is its size, 9,218 bytes.</li>
+<li><strong><code>docker-content-digest</code></strong> is its fingerprint. That’s the <code>sha256:</code>
+checksum of those exact bytes. You’ll see a lot more of these.</li>
+</ul>
+<p>We also sent an <code>Accept</code> header. That’s how a client tells the server
+“these are the formats I can read.” Registries know several manifest
+formats, old and new, and some fall back to an old one if you don’t
+say. Our code will send the four formats Chapter 6 handles.</p>
+<p>One more registry, to check this isn’t a Docker Hub quirk. GitHub’s
+registry does the same dance, but its token reply has only <code>token</code>, no
+<code>access_token</code>:</p>
+<pre><code>$ curl -sS "https://ghcr.io/token?service=ghcr.io&amp;scope=repository:containerd/busybox:pull"
+</code></pre>
+<pre><code>{"token":"djE6Y29udGFpbmVyZC9idXN5Ym94OjE3OTAyNjAwMDc2MjgzNDg3NDI="}
+</code></pre>
+<p>So our code reads <code>token</code> and ignores the rest.</p>
+<h2 id="the-plan"><a class="header" href="#the-plan">The plan</a></h2>
+<p>The code has four pieces, one job each:</p>
+<ol>
+<li><code>HttpClient</code> learns to send headers. Right now <code>get(url)</code> can’t send
+<code>Authorization</code> or <code>Accept</code>.</li>
+<li><code>parseChallenge</code> turns the <code>www-authenticate</code> text into
+<code>{ realm, service }</code>.</li>
+<li>An <strong>authenticator</strong> turns a challenge and a scope into a token.</li>
+<li><code>RegistryClient</code> gets a private method that does “try; on <code>401</code>, get
+a token; try once more.” Every request that needs permission goes
+through it.</li>
+</ol>
+<h2 id="step-1-httpclient-learns-to-send-headers"><a class="header" href="#step-1-httpclient-learns-to-send-headers">Step 1: <code>HttpClient</code> learns to send headers</a></h2>
+<p>Chapter 4 promised this could be added without touching the code that
+already works. Here’s how. Replace <code>src/http.ts</code>:</p>
+<pre><code class="language-ts">// Extra header lines to send, as name → value.
+// Record&lt;string, string&gt; is "an object whose keys and values are all strings",
+// like map[string]string in Go or dict[str, str] in Python.
+export type RequestHeaders = Record&lt;string, string&gt;
+
+export interface HttpClient {
+  // The ? makes headers optional: callers that need none can leave it off.
+  get(url: string, headers?: RequestHeaders): Promise&lt;Response&gt;
+}
+
+export class FetchHttpClient implements HttpClient {
+  // `= {}` fills in an empty object when the caller passed nothing.
+  async get(url: string, headers: RequestHeaders = {}): Promise&lt;Response&gt; {
+    return fetch(url, { headers })
+  }
+}
+</code></pre>
+<p>Three new bits of syntax:</p>
+<ul>
+<li><strong><code>Record&lt;string, string&gt;</code></strong> is the type for an object used as a
+lookup table: any keys, all strings, all values strings. The <code>&lt;...&gt;</code>
+is the fill-in-the-blank from Chapter 4: “a record <em>from</em> string <em>to</em>
+string.” We give it a name, <code>RequestHeaders</code>, because it’ll be
+written in several places. (Not <code>Headers</code>, because JavaScript already
+has a built-in class by that name.)</li>
+<li><strong><code>headers?:</code></strong> makes the parameter optional. Inside the interface,
+that means callers may leave it off. Go has no optional parameters,
+so there you’d add a second method. Python has them with
+<code>headers=None</code>.</li>
+<li><strong><code>headers: RequestHeaders = {}</code></strong> in the class is a <em>default value</em>,
+the same as in Python. If nobody passes headers, <code>headers</code> is <code>{}</code>.
+So inside the method, <code>headers</code> is never missing.</li>
+</ul>
+<p><code>fetch(url, { headers })</code> passes the headers on. <code>fetch</code>’s second
+argument is an object of options, and <code>headers</code> is one of them.
+<code>{ headers }</code> is the same shorthand as before, meaning
+<code>{ headers: headers }</code>.</p>
+<p>Now the point. Run the checks:</p>
+<pre><code>$ npm run check
+</code></pre>
+<pre><code> Test Files  3 passed (3)
+      Tests  23 passed (23)
+</code></pre>
+<p>Nothing else changed, and nothing else had to. <code>checkApi</code> still calls
+<code>get(url)</code> with one argument, which is still allowed. The fake in
+<code>registry.test.ts</code> still has the right shape. Even
+<code>toHaveBeenCalledWith(url)</code> still passes, because the call really did
+have only one argument. Making the new parameter <em>optional</em> is what
+made this safe. A required parameter would have broken every caller.</p>
+<h2 id="step-2-read-the-challenge"><a class="header" href="#step-2-read-the-challenge">Step 2: read the challenge</a></h2>
+<p>The challenge is text:</p>
+<pre><code>Bearer realm="https://auth.docker.io/token",service="registry.docker.io",scope="repository:library/alpine:pull"
+</code></pre>
+<p>We want <code>realm</code> and <code>service</code> out of it. (Not <code>scope</code>: we’ll build our
+own, because we know which repository we want. GitHub’s front-door
+challenge in Chapter 4 said <code>scope="repository:user/image:pull"</code>, a
+placeholder that isn’t any real repository.)</p>
+<p>This is a new file, <code>src/auth.ts</code>, for everything about getting
+permission. First, the result type and an error class.</p>
+<blockquote>
+<p><strong>Your turn.</strong> In <code>src/auth.ts</code>, export an interface <code>Challenge</code> with
+two <code>readonly</code> string fields, <code>realm</code> and <code>service</code>. Then export an
+<code>AuthError</code> class, built like <code>InvalidReferenceError</code> from Chapter 3.
+It takes one <code>problem: string</code>, its message is <code>auth: &lt;problem&gt;</code>, and
+its <code>name</code> is <code>"AuthError"</code>.</p>
+</blockquote>
+<p>Here it is:</p>
+<pre><code class="language-ts">import type { HttpClient } from "./http.ts"
+
+// Where to go for a token, read out of a www-authenticate header.
+export interface Challenge {
+  readonly realm: string // the token server's address
+  readonly service: string // which registry the token is for
+}
+
+export class AuthError extends Error {
+  constructor(problem: string) {
+    super(`auth: ${problem}`)
+    this.name = "AuthError"
+  }
+}
+</code></pre>
+<p>(The <code>HttpClient</code> import is used further down. Until then,
+<code>noUnusedLocals</code> will complain about it. That’s fine for a few
+minutes.)</p>
+<p>Now the parser. The text is <code>Bearer </code> followed by <code>key="value"</code> pairs
+separated by commas. A regular expression picks out the pairs. You know
+regexes from Go and Python. Two JavaScript details are new:</p>
+<pre><code class="language-ts">// Matches one key="value" pair. (?&lt;key&gt;...) and (?&lt;value&gt;...) are named
+// groups: the matched text is read back as match.groups.key and .value.
+// The g at the end means "find every match, not just the first".
+const PARAM = /(?&lt;key&gt;[a-z]+)="(?&lt;value&gt;[^"]*)"/g
+
+export function parseChallenge(header: string): Challenge {
+  // Only a Bearer challenge sends us off to fetch a token.
+  if (!header.startsWith("Bearer ")) {
+    throw new AuthError(`unsupported challenge: ${header}`)
+  }
+
+  // Every key="value" pair goes into a Map, like a Go map or a Python dict.
+  const params = new Map&lt;string, string&gt;()
+  for (const match of header.matchAll(PARAM)) {
+    // groups can be undefined in the type, so `?? {}` gives destructuring
+    // something to pull from. key and value are then string | undefined.
+    const { key, value } = match.groups ?? {}
+    if (key !== undefined &amp;&amp; value !== undefined) {
+      params.set(key, value)
+    }
+  }
+
+  // Map.get returns undefined for a missing key.
+  const realm = params.get("realm")
+  const service = params.get("service")
+  if (realm === undefined || service === undefined) {
+    throw new AuthError(`challenge is missing realm or service: ${header}`)
+  }
+  return { realm, service }
+}
+</code></pre>
+<p>Reading it:</p>
+<ul>
+<li><strong><code>/.../g</code></strong> is a regex written straight into the code, between
+slashes. Python needs <code>re.compile("...")</code>, and Go needs
+<code>regexp.MustCompile("...")</code>. The <code>g</code> flag means <em>global</em>: find every
+match. <code>matchAll</code> requires it.</li>
+<li><strong><code>(?&lt;key&gt;...)</code></strong> is a <em>named group</em>. It’s the same idea as Python’s
+<code>(?P&lt;key&gt;...)</code>, spelled without the <code>P</code>. After a match,
+<code>match.groups.key</code> holds whatever that group matched.</li>
+<li><strong><code>header.matchAll(PARAM)</code></strong> gives each match in turn, and
+<code>for ... of</code> walks through them. It’s Python’s <code>re.finditer</code> or Go’s
+<code>FindAllStringSubmatch</code>.</li>
+<li><strong><code>match.groups ?? {}</code>.</strong> The type of <code>groups</code> allows <code>undefined</code>,
+because a regex with no named groups has none. Ours always does, but
+the compiler can’t know that. So <code>?? {}</code> means “or an empty object if
+it’s missing.” Then <code>const { key, value } = ...</code> pulls both fields
+out. Either one might be missing, so each is <code>string | undefined</code>,
+and we check both before storing.</li>
+<li><strong><code>new Map&lt;string, string&gt;()</code></strong> is a real lookup table. For
+<code>RequestHeaders</code> we used a plain object, because <code>fetch</code> wants one.
+Here, nobody outside sees the table, so <code>Map</code> is the better tool:
+<code>get</code> returns <code>undefined</code> for a missing key, and the type says so.
+With <code>noUncheckedIndexedAccess</code> switched on in Chapter 2, a plain
+object would say the same. <code>Map</code> is just clearer about it.</li>
+</ul>
+<p>We don’t try to handle every challenge the standard allows. Two
+details are skipped: a comma <em>inside</em> a quoted value, and escaped
+quotes. No registry we’ve met sends either. If one ever does, the tests
+below are where you’d add a case.</p>
+<p>The <code>Bearer</code> check matters. A small private registry, the kind you run
+yourself with a password file, answers <code>Basic realm="..."</code> instead.
+That means “send a user name and password on every request,” with no
+token server. We don’t support that, and saying so clearly beats
+failing somewhere confusing later.</p>
+<h3 id="tests-for-the-parser"><a class="header" href="#tests-for-the-parser">Tests for the parser</a></h3>
+<p>It’s a plain function with no network, like <code>parseReference</code> in
+Chapter 3. The best test data is the real challenges from the three
+registries we’ve seen.</p>
+<blockquote>
+<p><strong>Your turn.</strong> Create <code>src/auth.test.ts</code>. Write an <code>it.each</code> over
+three rows, one each for the Docker Hub, GitHub, and Quay challenges
+below. Each row holds the <code>header</code> plus the <code>realm</code> and <code>service</code> you
+expect. Check that <code>parseChallenge(header)</code> equals <code>{ realm, service }</code>.
+Then two more tests: a <code>Basic</code> challenge throws <code>AuthError</code>, and a
+<code>Bearer</code> challenge with no <code>service</code> throws with a message containing
+<code>missing realm or service</code>.</p>
+<pre><code>Bearer realm="https://auth.docker.io/token",service="registry.docker.io"
+Bearer realm="https://ghcr.io/token",service="ghcr.io",scope="repository:user/image:pull"
+Bearer realm="https://quay.io/v2/auth",service="quay.io"
+</code></pre>
+</blockquote>
+<p>Here it is:</p>
+<pre><code class="language-ts">import { describe, expect, it } from "vitest"
+import { AuthError, parseChallenge } from "./auth.ts"
+
+describe("parseChallenge", () =&gt; {
+  // Three real challenges, from Docker Hub, GitHub, and Quay.
+  it.each([
+    {
+      header: 'Bearer realm="https://auth.docker.io/token",service="registry.docker.io"',
+      realm: "https://auth.docker.io/token",
+      service: "registry.docker.io",
+    },
+    {
+      // GitHub adds a scope; the parser must not trip over the extra pair.
+      header: 'Bearer realm="https://ghcr.io/token",service="ghcr.io",scope="repository:user/image:pull"',
+      realm: "https://ghcr.io/token",
+      service: "ghcr.io",
+    },
+    {
+      header: 'Bearer realm="https://quay.io/v2/auth",service="quay.io"',
+      realm: "https://quay.io/v2/auth",
+      service: "quay.io",
+    },
+  ])("reads realm and service from $service", ({ header, realm, service }) =&gt; {
+    expect(parseChallenge(header)).toEqual({ realm, service })
+  })
+
+  it("rejects a Basic challenge", () =&gt; {
+    // Not async: parseChallenge throws right away, so Chapter 3's
+    // wrap-it-in-a-function form is the right one.
+    expect(() =&gt; parseChallenge('Basic realm="Registry Realm"')).toThrow(AuthError)
+  })
+
+  it("rejects a challenge with no service", () =&gt; {
+    expect(() =&gt; parseChallenge('Bearer realm="https://auth.example.com/token"')).toThrow(
+      "missing realm or service",
+    )
+  })
+})
+</code></pre>
+<pre><code>$ npm test
+</code></pre>
+<pre><code> Test Files  4 passed (4)
+      Tests  28 passed (28)
+</code></pre>
+<h2 id="step-3-ask-for-a-token"><a class="header" href="#step-3-ask-for-a-token">Step 3: ask for a token</a></h2>
+<p>What does the rest of the code need from “the thing that gets tokens”?
+One thing: <em>given this challenge and this scope, give me a token.</em> How
+it does that is its own business. Today it’s anonymous, with no
+password. Later you’ll want to pull private images, which means sending
+a user name and password to the token server. That’s a <em>different</em> way
+of getting a token, not a change to when one is needed.</p>
+<p>So it’s an interface, and today’s way is one class that implements it.
+This is the same move as <code>HttpClient</code> in Chapter 4, for a different
+reason. There, it was so tests could fake it. Here, it’s so the code
+can grow.</p>
+<blockquote>
+<p><strong>Your turn.</strong> In <code>src/auth.ts</code>, export an interface <code>Authenticator</code>
+with one method, <code>token</code>, that takes a <code>challenge: Challenge</code> and a
+<code>scope: string</code> and returns <code>Promise&lt;string&gt;</code>.</p>
+</blockquote>
+<p>Here it is:</p>
+<pre><code class="language-ts">// Anything that can turn a challenge into a token. RegistryClient knows
+// only this; which way the token is fetched is someone else's business.
+export interface Authenticator {
+  token(challenge: Challenge, scope: string): Promise&lt;string&gt;
+}
+</code></pre>
+<p>This is the <strong>open/closed principle</strong>, the “O” in SOLID, at the exact
+line where it pays off. Code should be <em>open</em> to new behavior and
+<em>closed</em> to rewrites. Adding password login later means writing a new
+class, <code>PasswordAuthenticator implements Authenticator</code>, and handing it
+to <code>RegistryClient</code> in <code>main</code>. <code>RegistryClient</code> itself doesn’t change,
+and neither does the anonymous class below. New behavior arrives as new
+code, and old, tested code is left alone.</p>
+<p>Now the anonymous one. It needs to GET the token server, so it takes an
+<code>HttpClient</code> exactly as <code>RegistryClient</code> does:</p>
+<pre><code class="language-ts">// Asks for a token with no user name or password: enough for public images.
+export class AnonymousAuthenticator implements Authenticator {
+  private readonly http: HttpClient
+
+  constructor(http: HttpClient) {
+    this.http = http
+  }
+
+  async token(challenge: Challenge, scope: string): Promise&lt;string&gt; {
+    // URL takes an address apart; searchParams adds ?key=value parts
+    // and escapes any characters that aren't allowed there.
+    const url = new URL(challenge.realm)
+    url.searchParams.set("service", challenge.service)
+    url.searchParams.set("scope", scope)
+
+    // url.href is the whole address put back together as a string.
+    const response = await this.http.get(url.href)
+    if (response.status !== 200) {
+      throw new AuthError(`${url.href} answered ${response.status}`)
+    }
+
+    // unknown: "some value, I don't know what". Nothing can be done with
+    // it until it's checked, so every check below is required.
+    const body: unknown = await response.json()
+    if (
+      typeof body !== "object" || // not an object at all
+      body === null || // typeof null is "object", a JavaScript oddity
+      !("token" in body) || // no token field
+      typeof body.token !== "string" // a token field, but not text
+    ) {
+      throw new AuthError(`${url.href} sent no token`)
+    }
+    // After those checks the compiler knows body.token is a string.
+    return body.token
+  }
+}
+</code></pre>
+<p>Two new things here, and the second one sets up Chapter 6.</p>
+<p><strong><code>URL</code> builds the address.</strong> Why not a template string,
+<code>`${realm}?service=${service}&amp;scope=${scope}`</code>? Because a scope
+holds <code>:</code> and <code>/</code>, and those have special meanings in an address.
+<code>searchParams.set</code> escapes them for us. It’s Go’s <code>url.Values</code> or
+Python’s <code>urllib.parse.urlencode</code>, built into the language. It also
+copes with a <code>realm</code> that already has a <code>?</code> in it. You’ll see the
+escaped address in the test below.</p>
+<p><strong><code>unknown</code>, and checking by hand.</strong> <code>response.json()</code> reads the body
+and turns the JSON text into a value. What value? The server decides,
+not us. So we say so: <code>body: unknown</code>. Unlike <code>any</code>, <code>unknown</code> lets you
+do <em>nothing</em> with the value until you’ve proven what it is. <code>body.token</code>
+won’t even compile at first. Each check in the <code>if</code> narrows it:</p>
+<ol>
+<li><code>typeof body !== "object"</code> rules out strings, numbers, and so on.</li>
+<li><code>body === null</code> is needed because in JavaScript <code>typeof null</code> is
+<code>"object"</code>. It’s an old mistake in the language that can’t be fixed
+now.</li>
+<li><code>"token" in body</code> asks “does it have a <code>token</code> field?” After it
+passes, the compiler lets you <em>read</em> <code>body.token</code>, but still as
+<code>unknown</code>.</li>
+<li><code>typeof body.token !== "string"</code> makes it a string.</li>
+</ol>
+<p>Only after all four is <code>return body.token</code> allowed as a <code>string</code>. Leave
+one out and the compiler stops you. That’s four careful lines to trust
+<em>one</em> field. A manifest has dozens of fields, nested several levels
+deep. Doing this by hand for that would be long, easy to get wrong, and
+tiring to read. That’s exactly what Chapter 6’s <code>zod</code> is for. Remember
+this <code>if</code>, because Chapter 6 replaces the idea with one line per
+field.</p>
+<p>(<code>response.json()</code> is typed as returning <code>Promise&lt;any&gt;</code>. Writing
+<code>const body: unknown</code> throws the <code>any</code> away on purpose. With <code>any</code>,
+<code>return body.token</code> would compile with no checks at all, and a
+server that forgot the token would hand <code>undefined</code> to the rest of our
+program, typed as a <code>string</code>.)</p>
+<h2 id="step-4-one-fake-two-test-files"><a class="header" href="#step-4-one-fake-two-test-files">Step 4: one fake, two test files</a></h2>
+<p>To test <code>AnonymousAuthenticator</code> we need a pretend <code>HttpClient</code> again.
+<code>replyingWith</code> in <code>registry.test.ts</code> is exactly that. Copying it into
+<code>auth.test.ts</code> would give two copies to keep in step, which is what
+<strong>DRY</strong> (“don’t repeat yourself”) warns against. The fix is to move it
+to a file both tests import.</p>
+<blockquote>
+<p><strong>Your turn.</strong> Create <code>src/fake-http.ts</code>. Move the <code>FakeHttp</code>
+interface and <code>replyingWith</code> out of <code>registry.test.ts</code> into it, add
+<code>export</code> to both, and bring the imports they need. Then import
+<code>replyingWith</code> in <code>registry.test.ts</code>, and remove the imports it no
+longer uses there (<code>noUnusedLocals</code> will tell you which).</p>
+</blockquote>
+<p>Here it is. <code>src/fake-http.ts</code>:</p>
+<pre><code class="language-ts">import { type Mock, vi } from "vitest"
+import type { HttpClient } from "./http.ts"
+
+// A pretend HttpClient, plus its get() so tests can ask how it was called.
+export interface FakeHttp {
+  http: HttpClient
+  get: Mock&lt;HttpClient["get"]&gt;
+}
+
+// A pretend HttpClient whose get() always returns `response`.
+export function replyingWith(response: Response): FakeHttp {
+  const get = vi.fn&lt;HttpClient["get"]&gt;(async () =&gt; response)
+  const http: HttpClient = { get }
+  return { http, get }
+}
+</code></pre>
+<p>And the top of <code>src/registry.test.ts</code>:</p>
+<pre><code class="language-ts">import { describe, expect, it } from "vitest"
+import { replyingWith } from "./fake-http.ts"
+import { RegistryClient, RegistryError } from "./registry.ts"
+</code></pre>
+<p>The file doesn’t end in <code>.test.ts</code>, so Vitest won’t try to run it as
+tests. It isn’t imported by anything outside tests either, so it never
+becomes part of the program.</p>
+<h3 id="tests-for-the-authenticator"><a class="header" href="#tests-for-the-authenticator">Tests for the authenticator</a></h3>
+<p>One more new tool: <strong><code>Response.json(value)</code></strong>. It builds a <code>Response</code>
+whose body is <code>value</code> as JSON, with the right <code>content-type</code>. It’s
+the quick way to fake a JSON reply.</p>
+<pre><code class="language-ts">// Add to the imports at the top of auth.test.ts:
+import { AnonymousAuthenticator, AuthError, parseChallenge } from "./auth.ts"
+import { replyingWith } from "./fake-http.ts"
+
+// ...and below the parseChallenge tests:
+
+// Docker Hub's challenge, already parsed.
+const challenge = { realm: "https://auth.docker.io/token", service: "registry.docker.io" }
+
+describe("AnonymousAuthenticator", () =&gt; {
+  it("asks the realm for a token with service and scope", async () =&gt; {
+    // Response.json builds a reply whose body is this object, as JSON.
+    const { http, get } = replyingWith(Response.json({ token: "abc" }))
+
+    const token = await new AnonymousAuthenticator(http).token(challenge, "repository:library/alpine:pull")
+
+    expect(token).toBe("abc")
+    // %3A is ":" and %2F is "/", escaped by searchParams.
+    expect(get).toHaveBeenCalledWith(
+      "https://auth.docker.io/token?service=registry.docker.io&amp;scope=repository%3Alibrary%2Falpine%3Apull",
+    )
+  })
+})
+</code></pre>
+<p>That expected address is what <code>URL</code> actually produces. <code>:</code> became
+<code>%3A</code> and <code>/</code> became <code>%2F</code>. Docker Hub reads it the same as the
+unescaped form you typed into curl. We’re checking that our code builds
+<em>exactly</em> this address. If a later edit forgot the <code>service</code> or
+misspelled <code>scope</code>, this is the test that fails.</p>
+<blockquote>
+<p><strong>Your turn.</strong> Two failure tests inside the same <code>describe</code>. First,
+the token server answers <code>403</code> (use <code>new Response(null, { status: 403 })</code>),
+and <code>token()</code> rejects with a message containing <code>answered 403</code>.
+Second, it answers <code>200</code> with JSON that has no <code>token</code> field, and
+<code>token()</code> rejects with <code>sent no token</code>.</p>
+</blockquote>
+<p>Here it is:</p>
+<pre><code class="language-ts">  it("throws when the token server says no", async () =&gt; {
+    const { http } = replyingWith(new Response(null, { status: 403 }))
+
+    await expect(new AnonymousAuthenticator(http).token(challenge, "repository:x:pull")).rejects.toThrow(
+      "answered 403",
+    )
+  })
+
+  it("throws when the reply has no token", async () =&gt; {
+    // Valid JSON, wrong shape: exactly what the four checks are for.
+    const { http } = replyingWith(Response.json({ access: "nope" }))
+
+    await expect(new AnonymousAuthenticator(http).token(challenge, "repository:x:pull")).rejects.toThrow(
+      "sent no token",
+    )
+  })
+</code></pre>
+<pre><code>$ npm test
+</code></pre>
+<pre><code> Test Files  4 passed (4)
+      Tests  31 passed (31)
+</code></pre>
+<h2 id="step-5-registryclient-retries-with-a-token"><a class="header" href="#step-5-registryclient-retries-with-a-token">Step 5: <code>RegistryClient</code> retries with a token</a></h2>
+<p>Now the piece that decides <em>when</em> a token is needed. It lives in
+<code>RegistryClient</code>, and it goes like this:</p>
+<ol>
+<li>GET the address, with a token if we already have one.</li>
+<li>Not <code>401</code>? Done, return the reply.</li>
+<li><code>401</code>: read the challenge, ask the authenticator for a token, keep
+it.</li>
+<li>GET again with the token. If that’s <em>still</em> <code>401</code>, give up with an
+error. Don’t loop.</li>
+</ol>
+<h3 id="a-small-tidy-up-first"><a class="header" href="#a-small-tidy-up-first">A small tidy-up first</a></h3>
+<p>Step 3 needs the challenge header out of a <code>401</code> reply, and fails if it
+isn’t there. <code>checkApi</code> already does exactly that, in three lines. Two
+copies would be the DRY problem again, so pull those lines out into a
+function both can use. Add this to <code>src/registry.ts</code>, above the class:</p>
+<pre><code class="language-ts">// The challenge from a 401 reply. A 401 without one is a broken registry.
+function challengeOf(url: string, response: Response): string {
+  const challenge = response.headers.get("www-authenticate")
+  if (challenge === null) {
+    throw new RegistryError(url, 401, "no www-authenticate header")
+  }
+  return challenge
+}
+</code></pre>
+<blockquote>
+<p><strong>Your turn.</strong> Change the <code>401</code> branch of <code>checkApi</code> to use
+<code>challengeOf</code>.</p>
+</blockquote>
+<p>Here it is:</p>
+<pre><code class="language-ts">    if (response.status === 401) {
+      return { kind: "needs-token", challenge: challengeOf(this.baseURL, response) }
+    }
+</code></pre>
+<p><code>checkApi</code> <em>decides</em> the same things it did before: <code>200</code> is open,
+<code>401</code> needs a token, anything else is an error. Only where three lines
+live has changed. <code>npm test</code> should still say 31 passed, including
+Chapter 4’s “no www-authenticate header” test, which now checks
+<code>challengeOf</code>.</p>
+<h3 id="handing-in-the-authenticator"><a class="header" href="#handing-in-the-authenticator">Handing in the authenticator</a></h3>
+<p><code>RegistryClient</code> needs an <code>Authenticator</code>, and just like <code>HttpClient</code>,
+it’s handed one rather than making its own. Add a third constructor
+parameter and two fields:</p>
+<pre><code class="language-ts">import { type Authenticator, parseChallenge } from "./auth.ts"
+import type { HttpClient, RequestHeaders } from "./http.ts"
+import { DEFAULT_REGISTRY } from "./reference.ts"
+
+// ...
+
+export class RegistryClient {
+  private readonly http: HttpClient
+  private readonly auth: Authenticator
+  private readonly baseURL: string
+  // No readonly: starts empty, set once the first token arrives.
+  private token: string | undefined
+
+  constructor(http: HttpClient, registry: string, auth: Authenticator) {
+    this.http = http
+    this.auth = auth
+    this.baseURL = `https://${apiHost(registry)}/v2/`
+  }
+</code></pre>
+<p><code>private token: string | undefined</code> with no <code>= ...</code> starts out as
+<code>undefined</code>. The type says it can be, so the compiler makes every
+reader check.</p>
+<p>Run the type check:</p>
+<pre><code>$ npm run typecheck
+</code></pre>
+<pre><code>src/main.ts(39,22): error TS2554: Expected 3 arguments, but got 2.
+src/registry.test.ts(9,26): error TS2554: Expected 3 arguments, but got 2.
+src/registry.test.ts(20,26): error TS2554: Expected 3 arguments, but got 2.
+src/registry.test.ts(32,11): error TS2554: Expected 3 arguments, but got 2.
+src/registry.test.ts(40,18): error TS2554: Expected 3 arguments, but got 2.
+src/registry.test.ts(48,18): error TS2554: Expected 3 arguments, but got 2.
+src/registry.ts(1,30): error TS6133: 'parseChallenge' is declared but its value is never read.
+src/registry.ts(2,27): error TS6196: 'RequestHeaders' is declared but never used.
+src/registry.ts(36,20): error TS6133: 'auth' is declared but its value is never read.
+src/registry.ts(39,11): error TS6133: 'token' is declared but its value is never read.
+</code></pre>
+<p>(Your line numbers will differ, depending on your comments.) Two kinds
+of error. The last four are “never used” warnings. The next section
+uses all four names, so ignore them for now.</p>
+<p>The first six matter. Unlike Step 1’s optional parameter, this one is
+required, so every caller broke, and the compiler lists each one. Read
+it as a to-do list. <code>main.ts</code> waits for Step 7. The tests we fix now.</p>
+<p>Chapter 4’s <code>checkApi</code> tests should never cause a token request. So
+hand them an authenticator that makes the test fail if it’s ever asked:</p>
+<pre><code class="language-ts">// Add to the imports at the top of registry.test.ts:
+import type { Authenticator } from "./auth.ts"
+
+// An Authenticator that fails the test if anyone asks it for a token.
+// checkApi never should, so these tests hand it this one.
+const neverAuth: Authenticator = {
+  token: async (): Promise&lt;string&gt; =&gt; {
+    throw new Error("this test did not expect a token request")
+  },
+}
+</code></pre>
+<p>It’s a plain object with a <code>token</code> field, the right shape, so it’s an
+<code>Authenticator</code>, just like <code>{ get }</code> was an <code>HttpClient</code> in Chapter 4.
+It never answers. It only complains. A fake like this doesn’t need to
+be a mock, because there’s nothing to record. If it’s called at all,
+that’s already the failure.</p>
+<blockquote>
+<p><strong>Your turn.</strong> Add <code>neverAuth</code> as the third argument to every
+<code>new RegistryClient(...)</code> in <code>registry.test.ts</code>.</p>
+</blockquote>
+<p>Here’s one; the other four are the same:</p>
+<pre><code class="language-ts">    const result = await new RegistryClient(http, "mcr.microsoft.com", neverAuth).checkApi()
+</code></pre>
+<h3 id="try-get-a-token-try-once-more"><a class="header" href="#try-get-a-token-try-once-more">Try, get a token, try once more</a></h3>
+<p>Now the method itself. It’s <code>private</code>, because nobody outside should
+call it. Public methods like <code>fetchManifest</code> (next) go through it.
+Add both of these inside the class, below <code>checkApi</code>:</p>
+<pre><code class="language-ts">  // GET with whatever token we have. On a 401, fetch a token and try
+  // once more. Every request that needs permission goes through here.
+  private async authorizedGet(url: string, scope: string, headers: RequestHeaders): Promise&lt;Response&gt; {
+    const first = await this.http.get(url, this.withToken(headers))
+    if (first.status !== 401) {
+      return first
+    }
+
+    const challenge = parseChallenge(challengeOf(url, first))
+    this.token = await this.auth.token(challenge, scope)
+
+    const second = await this.http.get(url, this.withToken(headers))
+    if (second.status === 401) {
+      // A fresh token and still no: don't loop, stop.
+      throw new RegistryError(url, 401, "token was refused")
+    }
+    return second
+  }
+
+  // The headers, plus an authorization line if we hold a token.
+  private withToken(headers: RequestHeaders): RequestHeaders {
+    if (this.token === undefined) {
+      return headers
+    }
+    // ...headers copies every field of headers into the new object.
+    return { ...headers, authorization: `Bearer ${this.token}` }
+  }
+</code></pre>
+<p><strong><code>{ ...headers, authorization: ... }</code></strong> makes a <em>new</em> object with
+every field of <code>headers</code> copied in, then <code>authorization</code> added. The
+<code>...</code> (called <em>spread</em>) means “all the fields of.” It’s Python’s
+<code>{**headers, "authorization": ...}</code>. Go has no short form; you’d loop
+and copy. Why a copy instead of <code>headers.authorization = ...</code>? Because
+<code>headers</code> belongs to the caller, and changing someone else’s object
+behind their back is how confusing bugs start.</p>
+<p>Header names aren’t case-sensitive, so <code>authorization</code> in lower case is
+the same as curl’s <code>Authorization</code>. We write them all in lower case,
+which is how <code>fetch</code> stores them anyway.</p>
+<p>A few things this method gets right without extra code:</p>
+<ul>
+<li><strong>The token is kept.</strong> The second manifest request, or a layer
+download in Chapter 7, sends it straight away. There’s no <code>401</code> round
+trip every time.</li>
+<li><strong>An expired token fixes itself.</strong> Docker Hub’s tokens last five
+minutes. When one runs out, the registry answers <code>401</code>, and that’s
+exactly the case that fetches a new token and tries again.</li>
+<li><strong>An open registry costs nothing.</strong> Microsoft’s registry answers
+<code>200</code> on the first try, and the authenticator is never called.</li>
+</ul>
+<h3 id="fetching-the-manifest"><a class="header" href="#fetching-the-manifest">Fetching the manifest</a></h3>
+<p>Now a public method that uses it. The manifest’s address is
+<code>/v2/&lt;repository&gt;/manifests/&lt;tag or digest&gt;</code>. The scope asks to pull
+from that repository. The <code>Accept</code> header lists the formats we’ll
+read. Add the list near the top of <code>registry.ts</code>:</p>
+<pre><code class="language-ts">// The manifest formats we can read, sent in the Accept header.
+// Chapter 6 explains the four; for now, "any of these, please".
+const MANIFEST_TYPES = [
+  "application/vnd.oci.image.index.v1+json",
+  "application/vnd.oci.image.manifest.v1+json",
+  "application/vnd.docker.distribution.manifest.list.v2+json",
+  "application/vnd.docker.distribution.manifest.v2+json",
+]
+</code></pre>
+<p>This chapter doesn’t <em>read</em> the manifest. It gets it and hands it back
+exactly as it arrived. Name that shape, below <code>ApiCheck</code>:</p>
+<pre><code class="language-ts">// A manifest as it arrived: not read or checked yet. That's Chapter 6.
+export interface RawManifest {
+  readonly mediaType: string // what the server says the bytes are
+  readonly digest: string | null // the server's fingerprint, if it sent one
+  readonly bytes: Uint8Array // the body, as raw bytes (like []byte in Go)
+}
+</code></pre>
+<p><code>digest</code> is <code>string | null</code> because the header may be missing, and
+<code>headers.get</code> says so with <code>null</code>. We pass that on honestly instead of
+inventing a value. <code>Uint8Array</code> is JavaScript’s byte array, Go’s
+<code>[]byte</code> or Python’s <code>bytes</code>. Bytes, not text, because Chapter 7 will
+compute the checksum of these <em>exact</em> bytes. Turning them into text
+and back could change them.</p>
+<p>And the method, inside the class above <code>authorizedGet</code>:</p>
+<pre><code class="language-ts">  // reference is a tag ("latest") or a digest ("sha256:...").
+  async fetchManifest(repository: string, reference: string): Promise&lt;RawManifest&gt; {
+    const url = `${this.baseURL}${repository}/manifests/${reference}`
+    // The scope asks for exactly one thing: pull access to this repository.
+    const response = await this.authorizedGet(url, `repository:${repository}:pull`, {
+      accept: MANIFEST_TYPES.join(", "),
+    })
+    if (response.status !== 200) {
+      throw new RegistryError(url, response.status, "unexpected status")
+    }
+    return {
+      // ?? "": use an empty string if the header is missing.
+      mediaType: response.headers.get("content-type") ?? "",
+      digest: response.headers.get("docker-content-digest"),
+      // arrayBuffer() reads the whole body; Uint8Array views it as bytes.
+      bytes: new Uint8Array(await response.arrayBuffer()),
+    }
+  }
+</code></pre>
+<p>Notice what <code>fetchManifest</code> <em>doesn’t</em> contain: anything about tokens.
+It says “GET this, with permission to pull this repository,” and
+<code>authorizedGet</code> handles the rest. Chapter 7’s layer download will be
+the same: one call to <code>authorizedGet</code>, and no token logic of its own.</p>
+<p><code>registry.ts</code> now reads, top to bottom: imports,
+<code>DOCKER_HUB_API_HOST</code>, <code>MANIFEST_TYPES</code>, <code>ApiCheck</code>, <code>RawManifest</code>,
+<code>apiHost</code>, <code>RegistryError</code>, <code>challengeOf</code>, <code>RegistryClient</code>.</p>
+<h2 id="step-6-a-fake-that-answers-in-turn"><a class="header" href="#step-6-a-fake-that-answers-in-turn">Step 6: a fake that answers in turn</a></h2>
+<p><code>replyingWith</code> gives the same reply to every call. <code>fetchManifest</code> on
+Docker Hub makes two calls and needs two <em>different</em> replies: <code>401</code>,
+then the manifest. So we need a fake that answers from a queue.</p>
+<p>Vitest has this built in. <code>get.mockResolvedValueOnce(reply)</code> means
+“the next call that hasn’t been answered yet returns a Promise of
+<code>reply</code>.” Call it several times and the replies line up in order.</p>
+<p>Add to <code>src/fake-http.ts</code>:</p>
+<pre><code class="language-ts">// A pretend HttpClient that gives back `responses` one per call, in order.
+// `...responses` gathers every argument into one array, like *args in
+// Python or ...Response in Go.
+export function replyingInTurn(...responses: Response[]): FakeHttp {
+  // No implementation: once the queued replies run out, get() returns
+  // undefined and the code under test fails loudly.
+  const get = vi.fn&lt;HttpClient["get"]&gt;()
+  for (const response of responses) {
+    // Queue this reply for the next call that hasn't been answered yet.
+    get.mockResolvedValueOnce(response)
+  }
+  const http: HttpClient = { get }
+  return { http, get }
+}
+</code></pre>
+<p><strong><code>...responses: Response[]</code></strong> is the same three dots as spread, used
+the other way around. In a parameter list they <em>gather</em> all the
+arguments into one array. <code>replyingInTurn(a, b, c)</code> makes <code>responses</code>
+equal <code>[a, b, c]</code>. Go writes <code>...Response</code>, and Python writes <code>*args</code>.</p>
+<h3 id="one-reply-per-call-never-shared"><a class="header" href="#one-reply-per-call-never-shared">One reply per call, never shared</a></h3>
+<p>A <code>Response</code>’s body can be read <strong>once</strong>. After <code>.json()</code> or
+<code>.arrayBuffer()</code>, it’s used up. Reading it a second time fails:</p>
+<pre><code>TypeError: Body is unusable: Body has already been read
+</code></pre>
+<p>So a test must never hand the <em>same</em> <code>Response</code> object to two calls
+that both read the body. The fix is small: write functions that make a
+fresh reply each time they’re called. Add these to <code>registry.test.ts</code>,
+below the <code>checkApi</code> tests:</p>
+<pre><code class="language-ts">// The real Docker Hub challenge and manifest address, from the curl runs.
+const challenge = 'Bearer realm="https://auth.docker.io/token",service="registry.docker.io"'
+const manifestURL = "https://registry-1.docker.io/v2/library/alpine/manifests/latest"
+
+// A fresh 401 each call: a Response's body can only be read once,
+// so replies are never shared between calls.
+function unauthorized(): Response {
+  return new Response(null, { status: 401, headers: { "www-authenticate": challenge } })
+}
+
+function manifest(): Response {
+  return new Response("{}", {
+    status: 200,
+    headers: {
+      "content-type": "application/vnd.oci.image.index.v1+json",
+      "docker-content-digest": "sha256:abc",
+    },
+  })
+}
+
+// A pretend Authenticator that always hands out `token`.
+function tokenGiving(token: string): Authenticator {
+  return { token: vi.fn&lt;Authenticator["token"]&gt;(async () =&gt; token) }
+}
+</code></pre>
+<p>(The <code>"{}"</code> body is enough. <code>fetchManifest</code> doesn’t read the manifest
+yet, it only counts the bytes.)</p>
+<p><code>tokenGiving</code> is <code>replyingWith</code>’s idea again, for an <code>Authenticator</code>:
+a mock <code>token</code> that always answers the same, and records its calls.
+Add <code>vi</code> back to the Vitest import, and <code>replyingInTurn</code> to the
+<code>fake-http.ts</code> one.</p>
+<h3 id="the-tests"><a class="header" href="#the-tests">The tests</a></h3>
+<p>The main one plays the Docker Hub conversation:</p>
+<pre><code class="language-ts">describe("RegistryClient.fetchManifest", () =&gt; {
+  it("gets a token after a 401 and tries again with it", async () =&gt; {
+    // First call: 401. Second call: the manifest.
+    const { http, get } = replyingInTurn(unauthorized(), manifest())
+    const auth = tokenGiving("abc")
+
+    const result = await new RegistryClient(http, "docker.io", auth).fetchManifest("library/alpine", "latest")
+
+    expect(result.digest).toBe("sha256:abc")
+    // The challenge was read and the right scope asked for.
+    expect(auth.token).toHaveBeenCalledWith(
+      { realm: "https://auth.docker.io/token", service: "registry.docker.io" },
+      "repository:library/alpine:pull",
+    )
+    expect(get).toHaveBeenCalledTimes(2)
+    // The 2nd call carried the token. objectContaining ignores other
+    // headers (accept), so the test checks only what it's about.
+    expect(get).toHaveBeenNthCalledWith(2, manifestURL, expect.objectContaining({ authorization: "Bearer abc" }))
+  })
+})
+</code></pre>
+<p>Three new checks:</p>
+<ul>
+<li><strong><code>toHaveBeenCalledTimes(2)</code></strong>: exactly two calls. Not one (no retry)
+and not three (a loop).</li>
+<li><strong><code>toHaveBeenNthCalledWith(2, ...)</code></strong>: what the <em>second</em> call was
+given. Counting starts at 1 here, not 0.</li>
+<li><strong><code>expect.objectContaining({...})</code></strong>: “an object with <em>at least</em>
+these fields.” The real headers also hold <code>accept</code>, and this test
+isn’t about <code>accept</code>. Checking only what the test is about keeps it
+from breaking when an unrelated header changes.</li>
+</ul>
+<blockquote>
+<p><strong>Your turn.</strong> Three more, in the same <code>describe</code>:</p>
+<ol>
+<li><strong>Open registry.</strong> One reply, the manifest. Use <code>neverAuth</code>, so the
+test fails if a token is asked for. Check that <code>result.bytes.length</code>
+is <code>2</code>, the two bytes of <code>"{}"</code>.</li>
+<li><strong>Token reused.</strong> Three replies: <code>401</code>, manifest, manifest. Call
+<code>fetchManifest</code> twice on the <em>same</em> client. The authenticator is
+called once, and the last <code>get</code> call carries the token
+(<code>toHaveBeenLastCalledWith</code>).</li>
+<li><strong>Token refused.</strong> Two <code>401</code>s in a row. <code>fetchManifest</code> rejects
+with <code>token was refused</code>.</li>
+</ol>
+</blockquote>
+<p>Here they are:</p>
+<pre><code class="language-ts">  it("never asks for a token when the registry is open", async () =&gt; {
+    const { http } = replyingInTurn(manifest())
+
+    // neverAuth throws if called, so passing means no token was asked for.
+    const result = await new RegistryClient(http, "docker.io", neverAuth).fetchManifest("library/alpine", "latest")
+
+    expect(result.bytes.length).toBe(2) // the two bytes of "{}"
+  })
+
+  it("reuses the token on the next request", async () =&gt; {
+    const { http, get } = replyingInTurn(unauthorized(), manifest(), manifest())
+    const auth = tokenGiving("abc")
+    const client = new RegistryClient(http, "docker.io", auth)
+
+    await client.fetchManifest("library/alpine", "latest")
+    await client.fetchManifest("library/alpine", "latest")
+
+    expect(auth.token).toHaveBeenCalledTimes(1)
+    expect(get).toHaveBeenLastCalledWith(manifestURL, expect.objectContaining({ authorization: "Bearer abc" }))
+  })
+
+  it("throws when the registry refuses the token", async () =&gt; {
+    const { http } = replyingInTurn(unauthorized(), unauthorized())
+
+    await expect(
+      new RegistryClient(http, "docker.io", tokenGiving("abc")).fetchManifest("library/alpine", "latest"),
+    ).rejects.toThrow("token was refused")
+  })
+</code></pre>
+<h4 id="what-running-out-of-replies-looks-like"><a class="header" href="#what-running-out-of-replies-looks-like">What running out of replies looks like</a></h4>
+<p>In the token-reused test, try queueing only <em>two</em> replies,
+<code>replyingInTurn(unauthorized(), manifest())</code>, and run the tests:</p>
+<pre><code> FAIL  src/registry.test.ts &gt; RegistryClient.fetchManifest &gt; reuses the token on the next request
+TypeError: Cannot read properties of undefined (reading 'status')
+ ❯ RegistryClient.authorizedGet src/registry.ts:98:15
+     96|   private async authorizedGet(url: string, scope: string, headers: Req…
+     97|     const first = await this.http.get(url, this.withToken(headers))
+     98|     if (first.status !== 401) {
+       |               ^
+     99|       return first
+    100|     }
+ ❯ RegistryClient.fetchManifest src/registry.ts:79:22
+ ❯ src/registry.test.ts:123:5
+</code></pre>
+<p>The third call found the queue empty. <code>vi.fn()</code> with no implementation
+returns <code>undefined</code>, and our code tripped over it on the very next
+line. That’s why <code>replyingInTurn</code> deliberately has <em>no</em> default
+reply. If our code ever makes an extra call we didn’t expect, the test
+crashes and points at the line, instead of quietly getting some
+made-up answer. Put the third reply back.</p>
+<h3 id="the-whole-conversation-in-one-test"><a class="header" href="#the-whole-conversation-in-one-test">The whole conversation, in one test</a></h3>
+<p>Every test so far faked the authenticator. One test should run the real
+<code>AnonymousAuthenticator</code> <em>and</em> <code>RegistryClient</code> together, with one fake
+<code>HttpClient</code> answering for both the registry and the token server.
+Both classes take an <code>HttpClient</code>, so hand them the same one.</p>
+<blockquote>
+<p><strong>Your turn.</strong> Queue three replies: <code>unauthorized()</code>, a token reply
+made with <code>Response.json</code>, and <code>manifest()</code>. Build the client with
+<code>new AnonymousAuthenticator(http)</code>. Call <code>fetchManifest</code>, then check
+there were three calls and the third carried <code>Bearer abc</code>. You’ll
+need <code>AnonymousAuthenticator</code> in the import from <code>./auth.ts</code>, which
+means <code>type</code> moves inside the braces:
+<code>import { AnonymousAuthenticator, type Authenticator } from "./auth.ts"</code>.</p>
+</blockquote>
+<p>Here it is:</p>
+<pre><code class="language-ts">  it("works end to end with the real authenticator", async () =&gt; {
+    // One fake answers all three calls: the 401, the token server, the manifest.
+    const { http, get } = replyingInTurn(unauthorized(), Response.json({ token: "abc" }), manifest())
+    const client = new RegistryClient(http, "docker.io", new AnonymousAuthenticator(http))
+
+    await client.fetchManifest("library/alpine", "latest")
+
+    expect(get).toHaveBeenCalledTimes(3)
+    expect(get).toHaveBeenNthCalledWith(3, manifestURL, expect.objectContaining({ authorization: "Bearer abc" }))
+  })
+</code></pre>
+<p>That’s the curl dance from the start of the chapter: three requests,
+in order, token attached on the last. It runs without a network.</p>
+<h2 id="step-7-wire-it-into-the-program"><a class="header" href="#step-7-wire-it-into-the-program">Step 7: wire it into the program</a></h2>
+<p>Printing the manifest is its own small job, like <code>describeApiCheck</code>.
+Three lines this time. Building them as an array and joining is easier
+to read than one long string full of <code>\n</code>s. Add to <code>src/main.ts</code>,
+below <code>describeApiCheck</code>:</p>
+<pre><code class="language-ts">// Three lines about the manifest. join("\n") glues the array into one
+// string with a line break between items, like strings.Join in Go.
+function describeManifest(manifest: RawManifest): string {
+  return [
+    `manifest   ${manifest.mediaType}`,
+    `digest     ${manifest.digest ?? "(not sent)"}`,
+    `size       ${manifest.bytes.length} bytes`,
+  ].join("\n")
+}
+</code></pre>
+<p>The <code>digest ?? "(not sent)"</code> is where the <code>string | null</code> from
+<code>RawManifest</code> gets handled. The compiler wouldn’t let us print it as if
+it were always there.</p>
+<p>Now <code>main</code>. One <code>FetchHttpClient</code>, handed to <em>both</em> the authenticator
+and the registry client, since both just need to GET things. Change the
+middle of the <code>try</code>:</p>
+<pre><code class="language-ts">    // One real HTTP client, shared: the registry and the token server
+    // are both just addresses to GET.
+    const http = new FetchHttpClient()
+    const registry = new RegistryClient(http, ref.registry, new AnonymousAuthenticator(http))
+    console.log(describeApiCheck(await registry.checkApi()))
+    console.log(describeManifest(await registry.fetchManifest(ref.repository, target(ref))))
+</code></pre>
+<p><code>target(ref)</code> from Chapter 3 is the tag or the digest, whichever the
+user gave. That’s exactly what goes after <code>/manifests/</code>.</p>
+<blockquote>
+<p><strong>Your turn.</strong> Finish <code>main.ts</code>: import <code>AnonymousAuthenticator</code> and
+<code>AuthError</code> from <code>./auth.ts</code>, add <code>type RawManifest</code> to the
+<code>./registry.ts</code> import, and add <code>AuthError</code> to the errors the <code>catch</code>
+prints instead of re-throwing.</p>
+</blockquote>
+<p>Here it is:</p>
+<pre><code class="language-ts">import { AnonymousAuthenticator, AuthError } from "./auth.ts"
+import { FetchHttpClient } from "./http.ts"
+import { InvalidReferenceError, parseReference, target } from "./reference.ts"
+import { type ApiCheck, type RawManifest, RegistryClient, RegistryError } from "./registry.ts"
+
+// ...
+
+  } catch (err) {
+    // Any of our own errors: print the message, exit 1.
+    if (err instanceof InvalidReferenceError || err instanceof RegistryError || err instanceof AuthError) {
+      console.error(err.message)
+      return 1
+    }
+    throw err
+  }
+</code></pre>
+<p>This is still the only place in the program that says
+<code>new FetchHttpClient()</code> or <code>new AnonymousAuthenticator(...)</code>. When
+password login arrives, this is the line that picks
+<code>PasswordAuthenticator</code> instead. Nothing else changes.</p>
+<pre><code>$ npm run check
+</code></pre>
+<pre><code> Test Files  4 passed (4)
+      Tests  36 passed (36)
+</code></pre>
+<h2 id="try-it"><a class="header" href="#try-it">Try it</a></h2>
+<p>Docker Hub:</p>
+<pre><code>$ npm start --silent -- alpine ./rootfs
+</code></pre>
+<pre><code>registry   docker.io
+repository library/alpine
+tag        latest
+api        needs a token
+challenge  Bearer realm="https://auth.docker.io/token",service="registry.docker.io"
+manifest   application/vnd.oci.image.index.v1+json
+digest     sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
+size       9218 bytes
+would pull into ./rootfs
+</code></pre>
+<p>The same digest and size curl got by hand. (Your digest will differ.
+<code>alpine:latest</code> is rebuilt every few weeks, and each rebuild is new
+bytes with a new fingerprint.)</p>
+<p>Microsoft’s registry, which never asks:</p>
+<pre><code>$ npm start --silent -- mcr.microsoft.com/azurelinux/base/core:3.0 ./rootfs
+</code></pre>
+<pre><code>registry   mcr.microsoft.com
+repository azurelinux/base/core
+tag        3.0
+api        open, no token needed
+manifest   application/vnd.docker.distribution.manifest.list.v2+json
+digest     sha256:34a22db497ff34a0f35ca5fc54bd38711d04238a2c1b2f65d35dc9d45dd82584
+size       858 bytes
+would pull into ./rootfs
+</code></pre>
+<p>A different <code>content-type</code>: this is the older Docker name for the same
+idea, a list of manifests per CPU. That’s why we <code>Accept</code> four formats,
+and Chapter 6 has to handle both.</p>
+<p>GitHub’s registry, with its placeholder scope on the front door:</p>
+<pre><code>$ npm start --silent -- ghcr.io/containerd/busybox:1.36 ./rootfs
+</code></pre>
+<pre><code>registry   ghcr.io
+repository containerd/busybox
+tag        1.36
+api        needs a token
+challenge  Bearer realm="https://ghcr.io/token",service="ghcr.io",scope="repository:user/image:pull"
+manifest   application/vnd.docker.distribution.manifest.list.v2+json
+digest     sha256:7b3ccabffc97de872a30dfd234fd972a66d247c8cfc69b0550f276481852627c
+size       2295 bytes
+would pull into ./rootfs
+</code></pre>
+<p>It worked because we sent <em>our</em> scope, <code>repository:containerd/busybox:pull</code>,
+not the <code>user/image</code> one from the challenge.</p>
+<p>A tag that doesn’t exist:</p>
+<pre><code>$ npm start --silent -- alpine:no-such-tag ./rootfs
+</code></pre>
+<pre><code>registry   docker.io
+repository library/alpine
+tag        no-such-tag
+api        needs a token
+challenge  Bearer realm="https://auth.docker.io/token",service="registry.docker.io"
+https://registry-1.docker.io/v2/library/alpine/manifests/no-such-tag answered 404: unexpected status
+</code></pre>
+<p>A <code>404</code>, after the token. The repository exists, so we were allowed in,
+and then the tag wasn’t there.</p>
+<p>And a repository that doesn’t exist:</p>
+<pre><code>$ npm start --silent -- nosuchuser123/nosuchimage ./rootfs
+$ echo $?
+</code></pre>
+<pre><code>registry   docker.io
+repository nosuchuser123/nosuchimage
+tag        latest
+api        needs a token
+challenge  Bearer realm="https://auth.docker.io/token",service="registry.docker.io"
+https://registry-1.docker.io/v2/nosuchuser123/nosuchimage/manifests/latest answered 401: token was refused
+1
+</code></pre>
+<p>Not <code>404</code>, but <code>401</code>, even with a fresh token. That’s Docker Hub being
+careful. If it said “no such repository” to strangers, anyone could
+check whether a <em>private</em> repository exists by asking. So it gives the
+same answer for “doesn’t exist” and “not yours.” Our “token was
+refused” is accurate, but a user would find it unclear. Chapter 12’s
+tidy-up can add “(does the image exist? is it private?)” to that
+message.</p>
+<h2 id="what-this-chapter-doesnt-do"><a class="header" href="#what-this-chapter-doesnt-do">What this chapter doesn’t do</a></h2>
+<ul>
+<li><strong>No password login.</strong> Private images need a user name and password
+sent to the token server. That’s a new <code>Authenticator</code>, and nothing
+else changes. That’s the point of Step 3.</li>
+<li><strong>No <code>Basic</code> challenges.</strong> A registry you run yourself with a
+password file asks for the password on every request, with no token
+server. <code>parseChallenge</code> rejects those with a clear message.</li>
+<li><strong>One token per client.</strong> <code>RegistryClient</code> keeps a single token. A
+pull touches one repository, so that’s enough. If you ever asked the
+same client about a second repository, its first try would get <code>401</code>
+(wrong scope), and <code>authorizedGet</code> would fetch a new token. So it
+still works; it’s just one extra round trip.</li>
+<li><strong>The challenge parser is simple.</strong> It handles what real registries
+send, not every corner of the standard.</li>
+</ul>
+<h2 id="commit"><a class="header" href="#commit">Commit</a></h2>
+<pre><code>$ npm run check
+$ git add -A
+$ git commit -m "Fetch a token and the manifest"
+</code></pre>
+<h2 id="what-you-should-now-be-able-to-answer"><a class="header" href="#what-you-should-now-be-able-to-answer">What you should now be able to answer</a></h2>
+<ul>
+<li>What three requests does it take to get a manifest from Docker Hub,
+and what does each one send and get back?</li>
+<li>What are <code>realm</code>, <code>service</code>, and <code>scope</code> in a challenge? Why do we
+build our own scope instead of using the challenge’s?</li>
+<li>Why did adding <code>headers?</code> to <code>HttpClient.get</code> break nothing, while
+adding <code>auth</code> to <code>RegistryClient</code>’s constructor broke six places?</li>
+<li>What’s the difference between a <code>Record&lt;string, string&gt;</code> and a
+<code>Map&lt;string, string&gt;</code>, and why do we use each where we do?</li>
+<li>Why is <code>Authenticator</code> an interface? What would adding password login
+change, and what would it leave alone? What’s the name of that idea?</li>
+<li>Why is <code>body</code> typed <code>unknown</code> and not left as <code>any</code>? What does each
+of the four checks do?</li>
+<li>Why build the token address with <code>URL</code> instead of a template string?</li>
+<li>What does <code>...</code> mean in <code>{ ...headers }</code>, and what does it mean in
+<code>(...responses: Response[])</code>?</li>
+<li>Why must a fake never give the same <code>Response</code> object to two calls?</li>
+<li>What does <code>mockResolvedValueOnce</code> do? Why does <code>replyingInTurn</code> have
+no default reply?</li>
+<li>What does <code>neverAuth</code> check, and why doesn’t it need to be a mock?</li>
+<li>Why does <code>objectContaining</code> make a test less likely to break for no
+reason?</li>
+<li>Why does a missing Docker Hub repository answer <code>401</code> and not <code>404</code>?</li>
+</ul>
+<h2 id="next-chapter"><a class="header" href="#next-chapter">Next chapter</a></h2>
+<p>We have the manifest’s bytes but haven’t looked inside. Chapter 6
+reads them, and the lesson is to trust nothing the server sends.
+<code>JSON.parse</code> gives back <code>any</code>, the type that turns off type checking,
+so a missing field shows up three functions later as a baffling
+<code>undefined</code>. Step 3’s four-line <code>if</code> showed how tedious checking by
+hand is. <code>zod</code> lets you describe the shape once and get back either a
+value you can trust or an error that names the bad field. You also saw
+that one address can return two different kinds of manifest: an index
+(one per CPU) or a single image manifest. Chapter 6 tells them apart
+and picks the entry for your CPU.</p>
 
                     </main>
 
@@ -211,22 +1343,6 @@
         <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
         <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
 
-        <!-- Livereload script (if served using the cli tool) -->
-        <script>
-            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
-            const socket = new WebSocket(wsAddress);
-            socket.onmessage = function (event) {
-                if (event.data === "reload") {
-                    socket.close();
-                    location.reload();
-                }
-            };
-
-            window.onbeforeunload = function() {
-                socket.close();
-            }
-        </script>
 
 
         <script>
