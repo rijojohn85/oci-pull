@@ -39,7 +39,7 @@ export class InvalidReferenceError extends Error {
 }
 
 /** Default registry used when none is specified (Docker Hub). */
-const DEFAULT_REGISTRY = "docker.io"
+export const DEFAULT_REGISTRY = "docker.io"
 /** Default tag used when none is specified. */
 const DEFAULT_TAG = "latest"
 /** Prefix applied to official images on Docker Hub (e.g., "library/ubuntu"). */

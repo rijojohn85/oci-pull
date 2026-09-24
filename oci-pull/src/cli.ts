@@ -1,2 +1,2 @@
 import { main } from "./main.ts"
-process.exitCode = main(process.argv.slice(2))
+process.exitCode = await main(process.argv.slice(2))

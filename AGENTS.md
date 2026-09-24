@@ -25,6 +25,10 @@
 - Later chapters show edits, not full reprints; say which file and where.
 - No semicolons at line ends (ASI); a statement starting with [ ( or `
   gets a leading ;. Check user code and book blocks for that hazard.
+- Every function gets an explicit return type, even small test helpers
+  (user prefers explicit). Long inline return shapes get a named interface.
+- "Your turn" format: a blockquote `> **Your turn.** <what to write>`, then
+  "Here it is:" and the code.
 - Every code block carries plain-word inline comments explaining the
   syntax and intent of non-obvious lines, so the reader never has to
   flip back to the prose to read the code.

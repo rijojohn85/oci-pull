@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-d0daebb5.js";
+            window.path_to_searchindex_js = "searchindex-4dbaeaa2.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-b48846b6.js"></script>
@@ -2348,7 +2348,807 @@ Docker Hub is down. The answer is the pattern from Chapter 2.5 section
 what makes every test in the rest of this book run in milliseconds with
 the network unplugged.</p>
 <div style="break-before: page; page-break-before: always;"></div>
-<h1 id="the-first-call-to-the-registry"><a class="header" href="#the-first-call-to-the-registry">The First Call to the Registry</a></h1>
+<h1 id="chapter-4-the-first-call-to-the-registry"><a class="header" href="#chapter-4-the-first-call-to-the-registry">Chapter 4: The First Call to the Registry</a></h1>
+<p>Chapter 3 turned <code>alpine</code> into <code>docker.io/library/alpine:latest</code>
+without touching the network. This chapter makes the program talk to a
+real registry for the first time. It knocks on the front door, <code>/v2/</code>,
+and reports what it hears back.</p>
+<p>That’s a small amount of work, but it raises the question the rest of
+the book depends on: <strong>how do you test code that talks to the
+internet, without the internet?</strong> The answer is a pattern you met in
+miniature with the clock in Chapter 2.5 section 8. By the end of this
+chapter it’s real code, with real tests, that run in milliseconds with
+the network unplugged.</p>
+<p>New in this chapter: <code>fetch</code>, Node’s built-in way to make an HTTP
+request; <code>async</code>/<code>await</code> in real code; and your first <em>mock</em>, a pretend
+function that also records how it was called.</p>
+<h2 id="what-the-front-door-says"><a class="header" href="#what-the-front-door-says">What the front door says</a></h2>
+<p>Chapter 1 showed that every registry answers on <code>/v2/</code>. Here’s what
+four real registries say when you knock without a token. <code>-D -</code> prints
+the reply’s headers, and <code>-o /dev/null</code> throws away the body:</p>
+<pre><code>$ curl -sS -o /dev/null -D - https://registry-1.docker.io/v2/
+</code></pre>
+<pre><code>HTTP/2 401
+docker-distribution-api-version: registry/2.0
+www-authenticate: Bearer realm="https://auth.docker.io/token",service="registry.docker.io"
+</code></pre>
+<pre><code>$ curl -sS -o /dev/null -D - https://ghcr.io/v2/
+</code></pre>
+<pre><code>HTTP/2 401
+docker-distribution-api-version: registry/2.0
+www-authenticate: Bearer realm="https://ghcr.io/token",service="ghcr.io",scope="repository:user/image:pull"
+</code></pre>
+<pre><code>$ curl -sS -o /dev/null -D - https://mcr.microsoft.com/v2/
+</code></pre>
+<pre><code>HTTP/2 200
+docker-distribution-api-version: registry/2.0
+</code></pre>
+<p>(Headers trimmed to the ones that matter. The rest are dates and
+caching hints.)</p>
+<p>Three things to take from this:</p>
+<ul>
+<li><strong><code>200</code> means “come in.”</strong> Microsoft’s registry lets anyone read
+public images without a token.</li>
+<li><strong><code>401</code> means “not without a token”</strong>, and the reply says where to get
+one. That’s the <code>www-authenticate</code> header. Remember from Chapter 1
+that a header is a <code>name: value</code> line sent along with the reply. This
+one is called a <em>challenge</em>: “prove who you are, and here’s the
+address to ask.” Chapter 5 reads it and fetches the token. This
+chapter only needs to notice it’s there.</li>
+<li><strong>Anything else is a surprise</strong>, and we should say so clearly
+rather than carry on.</li>
+</ul>
+<p>One more detail. Notice the first command called
+<code>registry-1.docker.io</code>, not <code>docker.io</code>. That’s because <code>docker.io</code> is
+the name people <em>type</em>. The API lives somewhere else. Ask <code>docker.io</code>
+directly and you’re sent to Docker’s website:</p>
+<pre><code>$ curl -sS -o /dev/null -D - https://docker.io/v2/
+</code></pre>
+<pre><code>HTTP/2 302
+location: https://www.docker.com/v2/
+</code></pre>
+<p><code>302</code> means “look over there instead.” So our code needs one small
+translation: <code>docker.io</code> → <code>registry-1.docker.io</code>. Every other registry
+serves its API under its own name.</p>
+<h2 id="the-problem-with-testing-this"><a class="header" href="#the-problem-with-testing-this">The problem with testing this</a></h2>
+<p>The obvious way to write this is a function that calls <code>fetch</code> (Node’s
+built-in “make an HTTP request”) and looks at the answer. It would work.
+But think about its tests:</p>
+<ul>
+<li>They need the internet. No Wi-Fi on the train means no tests.</li>
+<li>They’re slow. Each call costs a real round trip.</li>
+<li>They break when Docker Hub has a bad day, even though your code
+didn’t change.</li>
+<li>And some answers can’t be produced on demand. How would you test
+“the server said <code>401</code> but forgot the challenge header”? You’d have
+to find a broken registry.</li>
+</ul>
+<p>The fix is the same trick as the clock in Chapter 2.5: <strong>the code that
+talks to the registry doesn’t make its own HTTP client. It’s handed
+one.</strong> In the program, you hand it the real one. In a test, you hand
+it a pretend one that answers whatever the test needs.</p>
+<p>There’s a name for this idea. Code should depend on a <em>description</em> of
+what it needs (an interface), not on one particular thing that does it
+(<code>fetch</code>). It’s called the <strong>dependency inversion principle</strong>, the “D”
+in SOLID. It’s the reason faking is possible at all, and it’ll come back
+in every chapter that touches the network, the disk, or the clock.</p>
+<h2 id="step-1-describe-what-we-need-from-http"><a class="header" href="#step-1-describe-what-we-need-from-http">Step 1: describe what we need from HTTP</a></h2>
+<p>What does registry code actually need? For now, one thing: “GET this
+URL and give me the reply.” So the description has exactly one method.</p>
+<p>Create <code>src/http.ts</code>:</p>
+<pre><code class="language-ts">// The one thing our code needs from HTTP: "GET this URL, give me the reply."
+// Code that talks to a registry asks for an HttpClient; it never calls
+// fetch itself. That's what lets a test hand it a pretend one.
+export interface HttpClient {
+  // Response is the reply type built into Node (same as in browsers).
+  // It holds the status code, the headers, and a body we can read later.
+  get(url: string): Promise&lt;Response&gt;
+}
+
+// The real client: a thin wrapper around Node's built-in fetch.
+export class FetchHttpClient implements HttpClient {
+  // `async` makes this method return a Promise (a box that holds the
+  // reply once it arrives). fetch already returns one, so we pass it on.
+  async get(url: string): Promise&lt;Response&gt; {
+    return fetch(url)
+  }
+}
+</code></pre>
+<p>A few things worth slowing down for.</p>
+<p><strong><code>fetch</code> and <code>Response</code> are built in.</strong> No import needed, and no
+package to install. Node ships the same <code>fetch</code> that browsers have.
+<code>fetch(url)</code> sends the request and returns a <em>Promise</em> of a <code>Response</code>.
+A quick reminder from Chapter 2.5 section 6: a Promise is a box that
+holds a value <em>later</em>, and <code>await</code> opens the box, pausing only the
+function that awaits.</p>
+<p><strong>The interface returns the real <code>Response</code> type</strong>, not one we made up.
+That’s on purpose. The real client stays a one-liner, and a test can
+build a reply with <code>new Response(...)</code>, which is the same class <code>fetch</code>
+itself returns. We’ll see that in the tests.</p>
+<p><strong><code>implements HttpClient</code> is a promise to the compiler.</strong> Remember that
+TypeScript checks shape, not names (Chapter 2.5 section 1), so a class
+would fit the interface even without the word <code>implements</code>. Writing it
+makes the compiler check the class right here, instead of at the first
+place someone uses it.</p>
+<p><strong>The interface has one method</strong>, not every HTTP method under the sun.
+Keep a description as small as what its users really need, so fakes
+stay small too. (That’s the “I” in SOLID, <em>interface segregation</em>,
+though the plain version is “don’t ask for more than you use.”) When
+Chapter 5 needs to send headers, we’ll widen it then.</p>
+<h2 id="step-2-one-name-one-place"><a class="header" href="#step-2-one-name-one-place">Step 2: one name, one place</a></h2>
+<p>The new code needs to know when a registry is Docker Hub. Chapter 3
+already has that string: <code>DEFAULT_REGISTRY = "docker.io"</code> in
+<code>reference.ts</code>. Typing <code>"docker.io"</code> again in a new file would be two
+copies of one fact, and one day only one of them would get changed.
+That’s the “don’t repeat yourself” rule, DRY: each fact lives in one
+place.</p>
+<blockquote>
+<p><strong>Your turn.</strong> Make <code>DEFAULT_REGISTRY</code> importable from other files.
+One word in <code>src/reference.ts</code>.</p>
+</blockquote>
+<p>Here’s the change:</p>
+<pre><code class="language-ts">/** Default registry used when none is specified (Docker Hub). */
+// `export` lets other files import it. Nothing else changes.
+export const DEFAULT_REGISTRY = "docker.io"
+</code></pre>
+<h2 id="step-3-where-the-api-lives"><a class="header" href="#step-3-where-the-api-lives">Step 3: where the API lives</a></h2>
+<p>Create <code>src/registry.ts</code> and start it with the translation from
+earlier:</p>
+<pre><code class="language-ts">// `import type` brings in a type only. It is erased when the program
+// runs, so this file has no run-time link to http.ts at all.
+import type { HttpClient } from "./http.ts"
+import { DEFAULT_REGISTRY } from "./reference.ts"
+
+// People type "docker.io", but Docker Hub's API lives on another host.
+const DOCKER_HUB_API_HOST = "registry-1.docker.io"
+
+// Turn the registry name from an image reference into the host to call.
+export function apiHost(registry: string): string {
+  return registry === DEFAULT_REGISTRY ? DOCKER_HUB_API_HOST : registry
+}
+</code></pre>
+<p><code>import type</code> came up in Chapter 2.5 section 7. It imports something
+that only exists for the compiler. <code>HttpClient</code> is an interface, and
+interfaces vanish when the program runs (types are labels, and labels
+get stripped). So this line disappears entirely at run time, and the
+setting <code>verbatimModuleSyntax</code> from Chapter 2 insists we say so.</p>
+<h2 id="step-4-two-possible-answers"><a class="header" href="#step-4-two-possible-answers">Step 4: two possible answers</a></h2>
+<p><code>/v2/</code> can answer in two ways we understand: “come in,” or “you need a
+token, ask here.” When a value can be one of a few shapes, Chapter 3’s
+tool for it is a union with a <code>kind</code> field. Each shape carries a
+<code>kind</code> with a fixed string, and checking <code>kind</code> tells both you and the
+compiler which shape you have.</p>
+<blockquote>
+<p><strong>Your turn.</strong> Add an exported type <code>ApiCheck</code> to <code>registry.ts</code>.
+It’s either <code>{ kind: "open" }</code> or
+<code>{ kind: "needs-token" }</code> plus a <code>challenge</code> string holding the
+<code>www-authenticate</code> value. Only the second shape has <code>challenge</code>.</p>
+</blockquote>
+<p>Here’s one way to write it:</p>
+<pre><code class="language-ts">// What the front door (/v2/) told us: one of two answers.
+// `kind` tells them apart, like Reference in Chapter 3.
+export type ApiCheck =
+  | { kind: "open" } // 200: come in, no token needed
+  | { kind: "needs-token"; challenge: string } // 401: here's where to ask
+</code></pre>
+<p>The shapes are written right inside the union this time, rather than as
+two named interfaces like <code>TaggedReference</code> and <code>DigestedReference</code>.
+Both work. Named interfaces pay off when other code refers to one shape
+by name. Nobody will here, so inline keeps it short.</p>
+<p>Why not one shape, <code>{ open: boolean; challenge?: string }</code>? Because
+then <code>{ open: true, challenge: "..." }</code> would be allowed, and so would
+<code>{ open: false }</code> with no challenge. Both are nonsense. With the union,
+the compiler rejects them.</p>
+<h2 id="step-5-an-error-of-our-own"><a class="header" href="#step-5-an-error-of-our-own">Step 5: an error of our own</a></h2>
+<p>When the registry says something we don’t understand, like <code>404</code> or
+<code>500</code>, we throw. As in Chapter 3, we throw our own error class, not a
+plain <code>Error</code>, so the caller can tell <em>our</em> “the registry said no”
+apart from a real bug with <code>instanceof</code>.</p>
+<blockquote>
+<p><strong>Your turn.</strong> Add a <code>RegistryError</code> class to <code>registry.ts</code>. It
+extends <code>Error</code> and keeps the <code>url</code> it called and the <code>status</code>
+number it got back, both <code>readonly</code>. The message should read like
+<code>https://example.com/v2/ answered 404: unexpected status</code>, so take a
+third constructor argument for the last part. Set <code>this.name</code> like
+<code>InvalidReferenceError</code> does.</p>
+</blockquote>
+<p>Here it is:</p>
+<pre><code class="language-ts">// Thrown when the registry answers something we don't understand.
+export class RegistryError extends Error {
+  // readonly: set once in the constructor, never changed after.
+  readonly url: string
+  readonly status: number
+
+  constructor(url: string, status: number, problem: string) {
+    // super(...) runs Error's own constructor, which stores the message.
+    super(`${url} answered ${status}: ${problem}`)
+    // Shows up in stack traces instead of the generic "Error".
+    this.name = "RegistryError"
+    this.url = url
+    this.status = status
+  }
+}
+</code></pre>
+<p>Same pattern as <code>InvalidReferenceError</code>: extend <code>Error</code>, pass a
+message up with <code>super</code>, and keep the details as fields so code that
+catches it can look at them, not just at the text.</p>
+<h2 id="step-6-the-client"><a class="header" href="#step-6-the-client">Step 6: the client</a></h2>
+<p>Now the class that actually knocks. It needs two things to do its job:
+an HTTP client, and which registry to talk to. It <em>asks</em> for both in
+its constructor and keeps them. That’s exactly how <code>Stopwatch</code> took a
+<code>Clock</code> in Chapter 2.5.</p>
+<p>Reminders, since this is the first real class in the project:</p>
+<ul>
+<li>Fields are declared in the class body, then assigned in the
+constructor. The one-line shortcut
+<code>constructor(private readonly http: HttpClient)</code> is ruled out by
+<code>erasableSyntaxOnly</code> from Chapter 2, because Node can’t strip it.</li>
+<li><code>private</code> means only code inside the class can see the field.</li>
+<li>An <code>async</code> method returns a Promise. Inside it, <code>await</code> pauses <em>this
+method only</em> until the reply arrives. Nothing else is blocked, since
+there’s one thread and it goes off to do other work.</li>
+</ul>
+<blockquote>
+<p><strong>Your turn.</strong> Add a <code>RegistryClient</code> class to <code>registry.ts</code>.</p>
+<ul>
+<li>Its constructor takes <code>http: HttpClient</code> and <code>registry: string</code>.
+Keep the client in a <code>private readonly</code> field. Work out the base
+URL once, <code>https://&lt;apiHost&gt;/v2/</code>, and keep that too.</li>
+<li>One method, <code>async checkApi(): Promise&lt;ApiCheck&gt;</code>. It GETs the
+base URL and then:
+<ul>
+<li>on <code>200</code>, returns <code>{ kind: "open" }</code></li>
+<li>on <code>401</code>, reads the <code>www-authenticate</code> header with
+<code>response.headers.get("www-authenticate")</code> and returns
+<code>needs-token</code> with it. <code>headers.get</code> returns <code>null</code> when the
+header is missing, so throw a <code>RegistryError</code> in that case.</li>
+<li>on anything else, throws a <code>RegistryError</code>.</li>
+</ul>
+</li>
+</ul>
+<p><code>response.status</code> is the number (<code>200</code>, <code>401</code>, …).</p>
+</blockquote>
+<p>Here it is:</p>
+<pre><code class="language-ts">// Talks to one registry. It is *given* an HttpClient instead of calling
+// fetch, so tests can pass a pretend one.
+export class RegistryClient {
+  private readonly http: HttpClient
+  // Worked out once, here, instead of in every method.
+  private readonly baseUrl: string
+
+  constructor(http: HttpClient, registry: string) {
+    this.http = http
+    this.baseUrl = `https://${apiHost(registry)}/v2/`
+  }
+
+  // Knock on the front door and report what the registry said.
+  async checkApi(): Promise&lt;ApiCheck&gt; {
+    // await pauses this method (only this one) until the reply arrives.
+    const response = await this.http.get(this.baseUrl)
+
+    if (response.status === 200) {
+      return { kind: "open" }
+    }
+    if (response.status === 401) {
+      // headers.get gives `string | null`: the header may be missing.
+      const challenge = response.headers.get("www-authenticate")
+      if (challenge === null) {
+        throw new RegistryError(this.baseUrl, 401, "no www-authenticate header")
+      }
+      // After the null check, challenge is a plain string.
+      return { kind: "needs-token", challenge }
+    }
+    throw new RegistryError(this.baseUrl, response.status, "unexpected status")
+  }
+}
+</code></pre>
+<p>Three things to notice.</p>
+<p><strong><code>headers.get</code> returns <code>string | null</code>.</strong> It’s the built-in type, and
+it’s honest: a header may not be there. Try deleting the <code>null</code> check
+and returning <code>challenge</code> anyway:</p>
+<pre><code>src/registry.ts(60,37): error TS2322: Type 'string | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'.
+</code></pre>
+<p>The <code>if (challenge === null)</code> check is what makes the rest work. After
+it, the compiler knows <code>challenge</code> is a plain <code>string</code>. This is
+<em>narrowing</em> again, from Chapter 2.5 section 3: an ordinary <code>if</code> that
+shrinks a type. (And <code>===</code>, never <code>==</code>, as in that same section.)</p>
+<p><strong>Nothing here says <code>fetch</code>.</strong> <code>RegistryClient</code> has no idea whether it’s
+talking to Docker Hub or to a test. It knows the <code>HttpClient</code> shape and
+nothing more. That’s dependency inversion, the “D” from earlier, now in
+real code.</p>
+<p><strong><code>{ kind: "needs-token", challenge }</code> is short for
+<code>{ kind: "needs-token", challenge: challenge }</code>.</strong> When a field and a
+variable share a name, you write it once. Go has no equivalent, and
+Python’s closest is <code>dict(challenge=challenge)</code>.</p>
+<h3 id="the-finished-file-in-order-1"><a class="header" href="#the-finished-file-in-order-1">The finished file, in order</a></h3>
+<p><code>registry.ts</code> now reads, top to bottom: the two imports,
+<code>DOCKER_HUB_API_HOST</code>, <code>apiHost</code>, <code>ApiCheck</code>, <code>RegistryError</code>,
+<code>RegistryClient</code>. Small pieces first, then the thing built from them.</p>
+<h2 id="step-7-tests-with-a-pretend-http-client"><a class="header" href="#step-7-tests-with-a-pretend-http-client">Step 7: tests with a pretend HTTP client</a></h2>
+<p>Here’s the new tool. Vitest has a helper, <code>vi.fn</code>, that makes a
+<strong>mock</strong>: a pretend function that does whatever you tell it, <em>and</em>
+records every call made to it (which arguments, how many times). Tests
+can then ask “was this called, and with what?”</p>
+<p>A mock is a fake that takes notes. We need both halves here. The fake
+part lets us choose the registry’s answer. The notes let us check
+which URL our code asked for.</p>
+<p>Create <code>src/registry.test.ts</code>:</p>
+<pre><code class="language-ts">// vi is Vitest's toolbox for pretend things; vi.fn makes a pretend function.
+// Mock is the type of such a pretend function; `type` marks it as a
+// type only, erased when the program runs.
+import { describe, expect, it, type Mock, vi } from "vitest"
+import type { HttpClient } from "./http.ts"
+import { RegistryClient, RegistryError } from "./registry.ts"
+
+// What replyingWith hands back: a pretend HttpClient to give to the
+// code under test, and its `get` to ask afterwards what it was called with.
+interface FakeHttp {
+  http: HttpClient
+  get: Mock&lt;HttpClient["get"]&gt;
+}
+
+// Build a pretend HttpClient whose get() always returns `response`.
+function replyingWith(response: Response): FakeHttp {
+  // HttpClient["get"] means "the type of HttpClient's get method",
+  // so the pretend function must take and return the same things.
+  const get = vi.fn&lt;HttpClient["get"]&gt;(async () =&gt; response)
+  // { get } is short for { get: get }. It has the shape of an
+  // HttpClient, and shape is all TypeScript checks.
+  const http: HttpClient = { get }
+  return { http, get }
+}
+
+describe("RegistryClient.checkApi", () =&gt; {
+  // The test function is async, so it can await. Vitest waits for it.
+  it("reports open when the registry answers 200", async () =&gt; {
+    // A real Response object, built by hand: no body, status 200.
+    const { http } = replyingWith(new Response(null, { status: 200 }))
+
+    const result = await new RegistryClient(http, "mcr.microsoft.com").checkApi()
+
+    expect(result).toEqual({ kind: "open" })
+  })
+})
+</code></pre>
+<p>Read <code>replyingWith</code> slowly. It’s the whole trick.</p>
+<ul>
+<li><code>vi.fn(async () =&gt; response)</code> makes a function that, whatever it’s
+called with, returns a Promise of <code>response</code>. It’s <code>async</code> because
+<code>HttpClient.get</code> returns a Promise.</li>
+<li>The <code>&lt;HttpClient["get"]&gt;</code> in angle brackets tells <code>vi.fn</code> which
+function it’s pretending to be. <code>HttpClient["get"]</code> reads as “the
+type of the <code>get</code> method on <code>HttpClient</code>,” the same square brackets
+you’d use to pull a field out of an object, applied to a type. Now if
+<code>HttpClient.get</code> ever changes, this line stops compiling instead of
+quietly drifting apart from it.</li>
+<li><code>{ get }</code> is an object with one field, <code>get</code>. That’s an <code>HttpClient</code>,
+because it has the right shape (Chapter 2.5 section 1 again). No
+class needed, and no <code>implements</code>.</li>
+<li><code>new Response(null, { status: 200 })</code> builds a reply by hand: no
+body, status <code>200</code>. It’s the same <code>Response</code> class that <code>fetch</code>
+returns, so <code>RegistryClient</code> can’t tell the difference.</li>
+</ul>
+<h3 id="the-angle-brackets-"><a class="header" href="#the-angle-brackets-">The angle brackets, <code>&lt;...&gt;</code></a></h3>
+<p><code>&lt;...&gt;</code> isn’t an operator. Nothing in it runs. It’s a <strong>blank in a type,
+filled in</strong>. Some types are only half-finished on their own. “A Promise”
+of <em>what</em>? “A pretend function” pretending to be <em>which</em> function? The
+angle brackets hold the answer. Chapter 2.5 section 9 called these
+<em>generics</em>; here they are in real code.</p>
+<p>You’ve seen them in two places, and they mean the same thing in both:</p>
+<pre><code class="language-ts">// 1. After a type name: fill in the type's blank.
+//    "A Promise that will hold a Response."
+get(url: string): Promise&lt;Response&gt;
+//    "A pretend function, pretending to be HttpClient's get."
+get: Mock&lt;HttpClient["get"]&gt;
+
+// 2. After a function name, in a call: fill in the function's blank.
+//    "vi.fn, make me a pretend version of HttpClient's get."
+vi.fn&lt;HttpClient["get"]&gt;(async () =&gt; response)
+</code></pre>
+<p>Your other languages have the same thing with different brackets. Go
+writes <code>[]</code> (<code>func First[T any](items []T) T</code>, called as <code>First[int](...)</code>). Python also
+uses <code>[]</code> (<code>list[str]</code>, <code>dict[str, int]</code>). TypeScript uses <code>&lt;&gt;</code>.</p>
+<p><strong>Most of the time you don’t write them.</strong> TypeScript fills the blank
+from what you pass. <code>first([1, 2, 3])</code> in Chapter 2.5 worked out
+<code>T = number</code> by itself. You write <code>&lt;...&gt;</code> when it would guess too
+little. <code>vi.fn</code> is exactly that case. Given only
+<code>async () =&gt; response</code>, it sees a function that takes <em>nothing</em>, so it
+fills the blank with “a function of no arguments.” Two things go wrong:</p>
+<ul>
+<li>
+<p><strong>The pretend function’s notes become useless.</strong> <code>get.mock.calls[0]</code>
+(the arguments of the first call) would be typed as an empty list, so
+reading the URL out of it fails:</p>
+<pre><code>error TS2493: Tuple type '[]' of length '0' has no element at index '0'.
+</code></pre>
+<p>With <code>&lt;HttpClient["get"]&gt;</code>, it’s typed as <code>[url: string]</code>.</p>
+</li>
+<li>
+<p><strong>A wrong pretend reply isn’t caught where you wrote it.</strong> With the
+brackets, returning something that isn’t a <code>Response</code> is flagged on
+the <code>vi.fn</code> line itself:</p>
+<pre><code>error TS2345: Argument of type '() =&gt; Promise&lt;string&gt;' is not assignable to parameter of type '(url: string) =&gt; Promise&lt;Response&gt;'.
+  Type 'Promise&lt;string&gt;' is not assignable to type 'Promise&lt;Response&gt;'.
+    Type 'string' is not assignable to type 'Response'.
+</code></pre>
+<p>Read the message top down. It names what you gave, then what was
+wanted, and then narrows it down to the actual mismatch: <code>string</code>
+where a <code>Response</code> should be.</p>
+</li>
+</ul>
+<p>So the brackets say “this is what I’m pretending to be.” The compiler
+then holds the pretend function to it, and types its notes to match.</p>
+<p>One last thing, so it’s never confusing: <code>&lt;</code> and <code>&gt;</code> still mean “less
+than” and “greater than” in ordinary expressions like <code>a &lt; b</code>. Where
+they sit tells you which. Right after a type name or function name,
+they’re a blank being filled in.</p>
+<p><strong>The return type, <code>FakeHttp</code>.</strong> TypeScript could work out what
+<code>replyingWith</code> returns on its own, from the <code>return { http, get }</code> line.
+We write it anyway, for two reasons. First, the reader sees what comes
+back without reading the body. Second, if the body ever changes by
+mistake, the compiler flags the function itself instead of some test
+further down. <code>Mock&lt;HttpClient["get"]&gt;</code> is Vitest’s type for “a pretend
+version of <code>HttpClient</code>’s <code>get</code>.” It’s what <code>vi.fn&lt;HttpClient["get"]&gt;</code>
+makes, and it has the call-recording parts (<code>toHaveBeenCalledWith</code>
+reads them) on top of being callable like the real <code>get</code>.</p>
+<p>The return type is a named interface rather than written inline after
+the <code>)</code>, because
+<code>{ http: HttpClient; get: Mock&lt;HttpClient["get"]&gt; }</code> crammed onto the
+function’s first line is hard to read. Naming it also documents it.</p>
+<p>This book writes a return type on every function from here on, even
+small helpers. It costs a few words and removes a guess.</p>
+<p>Run it:</p>
+<pre><code>$ npm test
+</code></pre>
+<p>It passes. Nothing left your machine.</p>
+<blockquote>
+<p><strong>Your turn.</strong> Add a test that the registry answering <code>401</code> with a
+<code>www-authenticate</code> header gives back <code>needs-token</code> with that exact
+challenge. <code>new Response</code> takes headers as a plain object:
+<code>{ status: 401, headers: { "www-authenticate": challenge } }</code>.</p>
+</blockquote>
+<p>Here it is, inside the <code>describe</code>:</p>
+<pre><code class="language-ts">  it("reports needs-token with the challenge when it answers 401", async () =&gt; {
+    // The real challenge Docker Hub sent us, copied from curl above.
+    const challenge = 'Bearer realm="https://auth.docker.io/token",service="registry.docker.io"'
+    const { http } = replyingWith(
+      new Response(null, { status: 401, headers: { "www-authenticate": challenge } }),
+    )
+
+    const result = await new RegistryClient(http, "docker.io").checkApi()
+
+    // { kind, challenge } shorthand again: the field has the variable's name.
+    expect(result).toEqual({ kind: "needs-token", challenge })
+  })
+</code></pre>
+<h3 id="checking-what-our-code-asked-for"><a class="header" href="#checking-what-our-code-asked-for">Checking what our code asked for</a></h3>
+<p>So far the mock only <em>answered</em>. Now use its notes. The interesting
+logic is <code>apiHost</code>: did <code>docker.io</code> really turn into
+<code>registry-1.docker.io</code>? <code>expect(get).toHaveBeenCalledWith(url)</code> asks
+the mock “were you ever called with exactly this?”</p>
+<p>We want to check three registries the same way, which is a job for
+<code>it.each</code> from Chapter 3. It takes a table of rows and runs one test
+per row, and <code>$name</code> in the title is filled in from each row.</p>
+<blockquote>
+<p><strong>Your turn.</strong> Write an <code>it.each</code> over three rows, <code>docker.io</code>,
+<code>ghcr.io</code> and <code>localhost:5000</code>, each paired with the URL it should
+call. Each test answers <code>200</code> and awaits <code>checkApi()</code>, then checks
+<code>get</code> with <code>toHaveBeenCalledWith</code>.</p>
+</blockquote>
+<p>Here it is:</p>
+<pre><code class="language-ts">  // it.each runs the same test once per row; $registry fills the name.
+  it.each([
+    { registry: "docker.io", url: "https://registry-1.docker.io/v2/" },
+    { registry: "ghcr.io", url: "https://ghcr.io/v2/" },
+    { registry: "localhost:5000", url: "https://localhost:5000/v2/" },
+  ])("calls $url for $registry", async ({ registry, url }) =&gt; {
+    const { http, get } = replyingWith(new Response(null, { status: 200 }))
+
+    await new RegistryClient(http, registry).checkApi()
+
+    // Did our code ask for the right URL? The pretend function recorded it.
+    expect(get).toHaveBeenCalledWith(url)
+  })
+</code></pre>
+<p><code>({ registry, url })</code> pulls two fields out of the row by name. It’s the
+same “take things out of a value” syntax as <code>const [image, outputDir] = argv</code> in <code>main.ts</code>, but with <code>{}</code> for fields instead of <code>[]</code> for
+positions.</p>
+<h4 id="what-a-mock-failure-looks-like"><a class="header" href="#what-a-mock-failure-looks-like">What a mock failure looks like</a></h4>
+<p>To see the notes pay off, break <code>apiHost</code> on purpose. Make it
+<code>return registry</code>, forgetting the Docker Hub case, and run the tests:</p>
+<pre><code> FAIL  src/registry.test.ts &gt; RegistryClient.checkApi &gt; calls https://registry-1.docker.io/v2/ for docker.io
+AssertionError: expected "vi.fn()" to be called with arguments: [ 'https://registry-1.docker.io/v2/' ]
+
+Received:
+
+  1st vi.fn() call:
+
+  [
+-   "https://registry-1.docker.io/v2/",
++   "https://docker.io/v2/",
+  ]
+
+
+Number of calls: 1
+</code></pre>
+<p>The mock shows what it expected (<code>-</code>) next to what it actually got
+(<code>+</code>). That’s the bug, spelled out, and no network was involved.
+Put <code>apiHost</code> back.</p>
+<h3 id="testing-that-something-throws-when-its-async"><a class="header" href="#testing-that-something-throws-when-its-async">Testing that something throws, when it’s async</a></h3>
+<p>In Chapter 3, <code>expect(() =&gt; parseReference("")).toThrow(...)</code> wrapped
+the call in a function, so <code>expect</code> could call it and catch what it
+threw. An <code>async</code> function doesn’t throw that way. It returns a Promise
+right away, and the Promise <em>rejects</em> later (fails, holding the error).
+So the check is different:</p>
+<pre><code class="language-ts">  it("throws RegistryError when a 401 has no challenge", async () =&gt; {
+    // A 401 with no www-authenticate header: a broken registry, on demand.
+    const { http } = replyingWith(new Response(null, { status: 401 }))
+
+    // .rejects waits for the promise to fail, then checks the error.
+    // The promise must be awaited, or the test ends before it fails.
+    await expect(new RegistryClient(http, "docker.io").checkApi()).rejects.toThrow(
+      "no www-authenticate header",
+    )
+  })
+</code></pre>
+<p>Two differences from Chapter 3. You pass the Promise itself (no
+wrapping function), and you put <code>.rejects</code> before <code>.toThrow</code>, which
+means “wait for this to fail, then check the error.” And the whole
+line is <code>await</code>ed.</p>
+<p>That <code>await</code> matters. Leave it off and Vitest catches you:</p>
+<pre><code> FAIL  src/registry.test.ts &gt; RegistryClient.checkApi &gt; throws RegistryError when a 401 has no challenge
+Error: Promise returned by `expect(actual).rejects.toThrow(expected)` was not awaited. This assertion is asynchronous and must be awaited; otherwise, it is not guaranteed to complete before the test finishes:
+
+await expect(actual).rejects.toThrow(expected)
+</code></pre>
+<p>Without the <code>await</code>, the test function would finish (and pass) before
+the Promise ever got a chance to fail. Vitest now refuses to let that
+slide. Older test runners didn’t, and tests like that passed for years
+while checking nothing.</p>
+<p>This is also the “broken registry, on demand” from earlier. A <code>401</code>
+with no challenge header is hard to find in the wild. Here it’s one
+line.</p>
+<blockquote>
+<p><strong>Your turn.</strong> Last test: <code>checkApi</code> throws a <code>RegistryError</code> for
+any status it doesn’t know. Use <code>it.each([404, 500])</code>. For a list of
+plain values, the title uses <code>%i</code> (an integer) instead of <code>$name</code>.
+This time pass the <em>class</em> <code>RegistryError</code> to <code>toThrow</code>, which
+checks the error’s type instead of its message.</p>
+</blockquote>
+<p>Here it is:</p>
+<pre><code class="language-ts">  // One test per status. %i in the title is replaced by the number.
+  it.each([404, 500])("throws RegistryError on status %i", async (status) =&gt; {
+    // { status } is short for { status: status }.
+    const { http } = replyingWith(new Response(null, { status }))
+
+    // toThrow(SomeClass) passes if the error is an instance of that class.
+    await expect(new RegistryClient(http, "example.com").checkApi()).rejects.toThrow(
+      RegistryError,
+    )
+  })
+</code></pre>
+<p>Now <code>npm test</code>:</p>
+<pre><code> Test Files  3 passed (3)
+      Tests  23 passed (23)
+</code></pre>
+<p>Seven new tests covering every branch of <code>checkApi</code>, including one a
+real registry would almost never give you, all without a single
+network call.</p>
+<h2 id="step-8-wire-it-into-the-program"><a class="header" href="#step-8-wire-it-into-the-program">Step 8: wire it into the program</a></h2>
+<p><code>main</code> now has to wait on the network. That means it becomes
+<code>async</code>, and, as Chapter 2.5 warned, <code>async</code> spreads upward. Whoever
+calls <code>main</code> must <code>await</code> it too.</p>
+<p>First, the printing. Turning an <code>ApiCheck</code> into a line of text is its
+own small job, so it gets its own small function. It’s the same kind
+of job as <code>target()</code> in Chapter 3: a <code>switch</code> on <code>kind</code> with a <code>case</code>
+for each shape, and no <code>default</code>. That last part is what lets the
+compiler complain if a third kind is ever added and forgotten here.</p>
+<blockquote>
+<p><strong>Your turn.</strong> In <code>src/main.ts</code>, write
+<code>describeApiCheck(check: ApiCheck): string</code>. For <code>open</code> it returns
+<code>api        open, no token needed</code>. For <code>needs-token</code> it returns two
+lines, <code>api        needs a token</code> then <code>challenge  &lt;the challenge&gt;</code>.
+<code>\n</code> inside a string is a line break.</p>
+</blockquote>
+<p>Here it is:</p>
+<pre><code class="language-ts">// One line of output for each kind of answer. The switch has no
+// default: add a third kind to ApiCheck and this stops compiling.
+function describeApiCheck(check: ApiCheck): string {
+  switch (check.kind) {
+    case "open":
+      return "api        open, no token needed"
+    case "needs-token":
+      // Inside this case, the compiler knows check has `challenge`.
+      return `api        needs a token\nchallenge  ${check.challenge}`
+  }
+}
+</code></pre>
+<p>Now the rest of <code>src/main.ts</code>. The changes are the imports, <code>async</code>,
+the <code>Promise&lt;number&gt;</code> return type, two new lines in the middle, and one
+more error class in the <code>catch</code>:</p>
+<pre><code class="language-ts">import { FetchHttpClient } from "./http.ts"
+import { InvalidReferenceError, parseReference, target } from "./reference.ts"
+// `type ApiCheck` inside the braces: this one name is a type only and
+// gets erased; the other two are real values kept at run time.
+import { type ApiCheck, RegistryClient, RegistryError } from "./registry.ts"
+
+export function usage(): string {
+  return "usage: oci-pull &lt;image&gt; &lt;output-dir&gt;"
+}
+
+// describeApiCheck from above goes here.
+
+// Now `async`: it waits on the network, so it returns Promise&lt;number&gt;.
+export async function main(argv: string[]): Promise&lt;number&gt; {
+  const [image, outputDir] = argv
+  if (image === undefined || outputDir === undefined) {
+    console.error(usage())
+    return 2
+  }
+
+  try {
+    const ref = parseReference(image)
+    console.log(`registry   ${ref.registry}`)
+    console.log(`repository ${ref.repository}`)
+    console.log(`${ref.kind === "tag" ? "tag       " : "digest    "} ${target(ref)}`)
+
+    // The only place that picks the *real* HTTP client. Everything
+    // below this line just uses whatever it was given.
+    const registry = new RegistryClient(new FetchHttpClient(), ref.registry)
+    console.log(describeApiCheck(await registry.checkApi()))
+
+    console.log(`would pull into ${outputDir}`)
+    return 0
+  } catch (err) {
+    // Either of our own errors: print the message, exit 1.
+    if (err instanceof InvalidReferenceError || err instanceof RegistryError) {
+      console.error(err.message)
+      return 1
+    }
+    throw err
+  }
+}
+</code></pre>
+<p>The <code>import { type ApiCheck, ... }</code> line mixes a type and two values in
+one import. Chapter 2.5 section 7 had <code>import type { ... }</code> for a line
+that’s <em>all</em> types. Putting <code>type</code> in front of a single name does the
+same thing for just that name.</p>
+<p>Notice where <code>new FetchHttpClient()</code> is: in <code>main</code>, not in
+<code>RegistryClient</code>. <code>main</code> is where the program decides which real
+pieces to use and hands them to the pieces that need them.
+Chapter 10 makes this the job of one file. For now, it’s one line.</p>
+<h3 id="the-await-that-async-spreads-to"><a class="header" href="#the-await-that-async-spreads-to">The <code>await</code> that <code>async</code> spreads to</a></h3>
+<p><code>main</code> returns <code>Promise&lt;number&gt;</code> now, not <code>number</code>. Leave <code>cli.ts</code> as it
+was and run the type check:</p>
+<pre><code>$ npm run typecheck
+</code></pre>
+<pre><code>src/cli.ts(2,1): error TS2322: Type 'Promise&lt;number&gt;' is not assignable to type 'string | number | null | undefined'.
+</code></pre>
+<p>That’s the forgotten-<code>await</code> bug from Chapter 2.5 section 6, caught.
+<code>process.exitCode</code> wants a number, and it’s being handed the box the
+number will arrive in. Without the type check, Node would try to use a
+Promise as an exit code.</p>
+<p>Fix <code>src/cli.ts</code>:</p>
+<pre><code class="language-ts">import { main } from "./main.ts"
+
+// await at the top level of a file: allowed in modules. Node waits for
+// main to finish, then exits with the code it returned.
+process.exitCode = await main(process.argv.slice(2))
+</code></pre>
+<p><code>await</code> outside any function is allowed in a module, which our project
+is, thanks to <code>"type": "module"</code> in <code>package.json</code> from Chapter 2. In
+Go terms, it’s <code>main()</code> blocking until the work is done, which is what
+you’d expect anyway.</p>
+<h2 id="try-it"><a class="header" href="#try-it">Try it</a></h2>
+<p>Docker Hub:</p>
+<pre><code>$ npm start --silent -- alpine ./rootfs
+</code></pre>
+<pre><code>registry   docker.io
+repository library/alpine
+tag        latest
+api        needs a token
+challenge  Bearer realm="https://auth.docker.io/token",service="registry.docker.io"
+would pull into ./rootfs
+</code></pre>
+<p>Our program asked <code>registry-1.docker.io</code>, not <code>docker.io</code>, and got back
+the same challenge curl did.</p>
+<p>Microsoft’s registry, which needs no token:</p>
+<pre><code>$ npm start --silent -- mcr.microsoft.com/azurelinux/base/core:3.0 ./rootfs
+</code></pre>
+<pre><code>registry   mcr.microsoft.com
+repository azurelinux/base/core
+tag        3.0
+api        open, no token needed
+would pull into ./rootfs
+</code></pre>
+<p>A host that isn’t a registry at all:</p>
+<pre><code>$ npm start --silent -- example.com/foo ./rootfs
+$ echo $?
+</code></pre>
+<pre><code>registry   example.com
+repository foo
+tag        latest
+https://example.com/v2/ answered 404: unexpected status
+1
+</code></pre>
+<p>That’s our <code>RegistryError</code>: caught in <code>main</code>, message printed, exit
+code <code>1</code>.</p>
+<h3 id="when-the-network-itself-fails"><a class="header" href="#when-the-network-itself-fails">When the network itself fails</a></h3>
+<p>One more, a host that doesn’t exist:</p>
+<pre><code>$ npm start --silent -- nosuch.invalid/foo ./rootfs
+</code></pre>
+<pre><code>registry   nosuch.invalid
+repository foo
+tag        latest
+node:internal/deps/undici/undici:13510
+      Error.captureStackTrace(err);
+            ^
+
+TypeError: fetch failed
+    at node:internal/deps/undici/undici:13510:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async RegistryClient.checkApi (file:///.../src/registry.ts:51:22)
+    at async main (file:///.../src/main.ts:40:34)
+    at async file:///.../src/cli.ts:5:20 {
+  [cause]: Error: getaddrinfo ENOTFOUND nosuch.invalid
+      ...
+    code: 'ENOTFOUND',
+    hostname: 'nosuch.invalid'
+  }
+}
+</code></pre>
+<p>A loud crash, and on purpose. <code>fetch</code> couldn’t even find the host, so
+it threw (<code>ENOTFOUND</code> is “no such name”). That isn’t one of <em>our</em>
+errors, so <code>main</code> re-threw it, as Chapter 3 decided: never hide an
+error you don’t understand.</p>
+<p>Two things are worth reading in that trace. First, the <code>at async ...</code>
+lines. The error started deep inside <code>fetch</code>, then came back out
+through every <code>await</code>: <code>checkApi</code>, then <code>main</code>, then <code>cli.ts</code>. That’s
+Chapter 2.5’s rule in action. When an awaited Promise fails, the
+<code>await</code> re-throws, so <code>try</code>/<code>catch</code> works across <code>await</code>s exactly like
+across normal calls. Second, <code>[cause]</code>. <code>fetch</code> wraps the real reason
+(the DNS lookup failed) inside its own <code>TypeError</code>. A friendly message
+for this case is part of Chapter 12’s tidy-up.</p>
+<h2 id="commit-2"><a class="header" href="#commit-2">Commit</a></h2>
+<pre><code>$ npm run check
+$ git add -A
+$ git commit -m "Knock on the registry's front door"
+</code></pre>
+<h2 id="what-you-should-now-be-able-to-answer-4"><a class="header" href="#what-you-should-now-be-able-to-answer-4">What you should now be able to answer</a></h2>
+<ul>
+<li>What does <code>/v2/</code> answer on Docker Hub, and on Microsoft’s registry?
+What does each answer mean?</li>
+<li>Why does our code call <code>registry-1.docker.io</code> when the user typed
+<code>docker.io</code>?</li>
+<li>What’s wrong with a test that calls the real Docker Hub?</li>
+<li>Why does <code>RegistryClient</code> take an <code>HttpClient</code> in its constructor
+instead of calling <code>fetch</code>? What’s the name for that idea?</li>
+<li>Why does <code>HttpClient</code> have one method and not five?</li>
+<li>Why does <code>HttpClient.get</code> return the built-in <code>Response</code> instead of a
+type of our own?</li>
+<li>What’s the difference between a fake and a mock? What does
+<code>toHaveBeenCalledWith</code> check?</li>
+<li>What does <code>HttpClient["get"]</code> mean as a type?</li>
+<li>What do the angle brackets in <code>vi.fn&lt;HttpClient["get"]&gt;(...)</code> do,
+and what two things go wrong if you leave them off?</li>
+<li>Why does <code>headers.get</code> return <code>string | null</code>, and what makes
+<code>challenge</code> a plain <code>string</code> afterwards?</li>
+<li>How is testing a throw from an <code>async</code> function different from
+Chapter 3’s <code>toThrow</code>? What goes wrong without the <code>await</code>?</li>
+<li>Why did <code>cli.ts</code> stop compiling when <code>main</code> became <code>async</code>?</li>
+<li>Why does a network failure crash the program instead of printing a
+tidy message?</li>
+</ul>
+<h2 id="next-chapter-4"><a class="header" href="#next-chapter-4">Next chapter</a></h2>
+<p>Docker Hub said no, and told us where to ask. Chapter 5 reads that
+challenge (<code>realm</code>, <code>service</code>), asks <code>auth.docker.io</code> for a token, and
+tries again with the token attached. That needs a fake that answers
+<em>differently each time it’s called</em>: <code>401</code> first, then a token, then
+<code>200</code>. It also needs the <code>HttpClient</code> interface to grow a way to send
+headers. We’ll add it without touching the code that decides <em>when</em> a
+token is needed, which is the “O” in SOLID: open to new additions,
+closed to rewrites.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="getting-permission-tokens"><a class="header" href="#getting-permission-tokens">Getting Permission: Tokens</a></h1>
 <div style="break-before: page; page-break-before: always;"></div>
