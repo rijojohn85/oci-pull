@@ -1,6 +1,7 @@
+import { AnonymousAuthenticator, AuthError } from "./auth.ts"
 import { FetchHttpClient } from "./http.ts"
 import { InvalidReferenceError, parseReference, target } from "./reference.ts"
-import { RegistryClient, RegistryError, type ApiCheck } from "./registry.ts"
+import { RegistryClient, RegistryError, type ApiCheck, type RawManifest } from "./registry.ts"
 
 export function useage(): string {
   return "useage: oci-pull <image> <output-dir>"
@@ -16,6 +17,15 @@ function describeApiCheck(check: ApiCheck): string {
       // Inside this case, the compiler knows check has `challenge`.
       return `api        needs a token\nchallenge  ${check.challenge}`
   }
+}
+// Three lines about the manifest. join("\n") glues the array into one
+// string with a line break between items, like strings.Join in Go.
+function describeManifest(manifest: RawManifest): string {
+  return [
+    `manifest   ${manifest.mediaType}`,
+    `digest     ${manifest.digest ?? "(not sent)"}`,
+    `size       ${manifest.bytes.length} bytes`,
+  ].join("\n")
 }
 export async function main(argv: string[]): Promise<number> {
   if (argv.length !== 2) {
@@ -36,11 +46,16 @@ export async function main(argv: string[]): Promise<number> {
     console.log(`${ref.kind === "tag" ? "tag       " : "digest    "} ${target(ref)}`)
     console.log(`would pull into ${outputDir}`)
 
-    const registry = new RegistryClient(new FetchHttpClient(), ref.registry)
+    // One real HTTP client, shared: the registry and the token server
+    // are both just addresses to GET.
+    const http = new FetchHttpClient()
+    const registry = new RegistryClient(http, ref.registry, new AnonymousAuthenticator(http))
     console.log(describeApiCheck(await registry.checkAPI()))
+    console.log(describeManifest(await registry.fetchManifest(ref.repository, target(ref))))
+
     return 0
   } catch (err) {
-    if (err instanceof InvalidReferenceError || err instanceof RegistryError) {
+    if (err instanceof InvalidReferenceError || err instanceof RegistryError || err instanceof AuthError) {
       console.error(err.message)
       return 1
     }
