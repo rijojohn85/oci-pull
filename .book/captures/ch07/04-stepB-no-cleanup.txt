@@ -1,0 +1,38 @@
+$ npm test
+# state: Step 3, failure on purpose: rm(partial) line (and rm import) removed from store.ts catch
+
+ RUN  v5.0.1 /tmp/claude-1000/-home-rijojohn-csi-driver/03863128-cbfb-4b66-806f-4e858c79bedd/scratchpad/ch7state/oci-pull
+
+ ❯ src/store.test.ts (4 tests | 1 failed) 38ms
+   ❯ ContentStore (4)
+     × refuses bytes that don't match the digest, and leaves nothing behind 15ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/store.test.ts > ContentStore > refuses bytes that don't match the digest, and leaves nothing behind
+AssertionError: expected [ Array(1) ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824.partial",
++ ]
+
+ ❯ src/store.test.ts:28:51
+     26|
+     27|     expect(await store.has(HELLO.digest)).toBe(false)
+     28|     expect(await readdir(join(root(), "sha256"))).toEqual([])
+       |                                                   ^
+     29|   })
+     30|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 6 passed (7)
+      Tests  1 failed | 58 passed (59)
+   Start at  18:04:42
+   Duration  409ms (import 43%, transform 40%, tests 14%, worker 3%)
+

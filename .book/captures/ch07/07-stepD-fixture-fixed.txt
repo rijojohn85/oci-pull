@@ -1,0 +1,33 @@
+$ npm test
+# state: Step 5: + real full ALPINE_AMD64 and bytesOf(null, 2); resolve tests still Ch6
+
+ RUN  v5.0.1 /tmp/claude-1000/-home-rijojohn-csi-driver/03863128-cbfb-4b66-806f-4e858c79bedd/scratchpad/ch7state/oci-pull
+
+ ❯ src/resolve.test.ts (3 tests | 1 failed) 31ms
+   ❯ resolveImage (3)
+     × refuses an index that points to another index 9ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/resolve.test.ts > resolveImage > refuses an index that points to another index
+AssertionError: expected [Function] to throw error including 'is another index, not an image' but got 'manifest: asked for sha256:c64c687cbe…'
+
+Expected: "is another index, not an image"
+Received: "manifest: asked for sha256:c64c687cbea9300178b30c95835354e34c4e4febc4badfe27102879de0483b5e, got bytes for sha256:0e140f1ba775b722a25f9dab679427f6bd46c3ba4953e38811ad988087e9cb90"
+
+ ❯ src/resolve.test.ts:51:83
+     49|
+     50|     // An async failure: await the expect, or the test ends too early.
+     51|     await expect(resolveImage({ fetchManifest }, "library/alpine", "3.…
+       |                                                                                   ^
+     52|       "is another index, not an image",
+     53|     )
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 7 passed (8)
+      Tests  1 failed | 60 passed (61)
+   Start at  18:05:01
+   Duration  729ms (transform 48%, import 37%, tests 13%, worker 2%)
+

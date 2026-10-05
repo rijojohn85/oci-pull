@@ -60,6 +60,21 @@ $ sudo runc run --bundle . demo
 3.20.3
 ```
 
+## The stages
+
+Pulling an image takes six stages. Every chapter opens with this list,
+marked to show where it fits:
+
+1. Read the image name (Chapter 3)
+2. Ask the registry, get a token (Chapters 4–5)
+3. Read the manifest, pick the platform (Chapter 6)
+4. Download the layers, check them (Chapter 7; faster in Chapter 8)
+5. Unpack them into a folder (Chapter 7 roughly; properly in Chapter 9)
+6. Run it with runc (Chapter 7; more in Chapter 11)
+
+Chapter 7 is where it all first works end to end, with two honest
+shortcuts. Each later chapter replaces one shortcut with the real thing.
+
 ## Table of contents
 
 1. **Why Build an Image Puller** — what actually happens during
@@ -90,24 +105,29 @@ $ sudo runc run --bundle . demo
    `zod` turns "some JSON" into "a value with a known shape, or a clear
    error." One server reply can be one of two shapes (a manifest, or a
    list of manifests for different CPUs); picking the right one.
-7. **Downloading One Layer** — streams (read a little, write a little,
-   never hold 200 MB in memory), computing the checksum *while* the bytes
-   go by, refusing anything whose checksum doesn't match. A content
-   store: files named after their own checksum. *One class, one job.*
-8. **Downloading Many Layers at Once** — `Promise.all`, why "all at
-   once" needs a limit, writing a small limiter ourselves (first generic
-   function, explained plainly), cancelling with `AbortController`, retry
-   with backoff, and faking the *clock* so retry tests take milliseconds
-9. **Unpacking Layers into a Folder** — layers apply in order, later
-   ones win, a file named `.wh.foo` means "delete `foo`"; the `tar`
-   package; tests against a real temporary folder, not a fake
+7. **The Whole Pull, Rough Version** — the first time the tool pulls an
+   image end to end and you run it with `runc`. Streams (read a little,
+   write a little, never hold 200 MB in memory), computing the checksum
+   *while* the bytes go by, refusing anything whose checksum doesn't
+   match. A content store: files named after their own checksum. *One
+   class, one job.* Two honest shortcuts, each replaced later: layers
+   download one at a time, and the system's `tar` command unpacks them.
+8. **Downloading Many Layers at Once** — replaces the one-at-a-time loop.
+   `Promise.all`, why "all at once" needs a limit, writing a small limiter
+   ourselves (first generic function, explained plainly), cancelling with
+   `AbortController`, retry with backoff, and faking the *clock* so retry
+   tests take milliseconds
+9. **Unpacking Layers into a Folder** — replaces the system `tar` shortcut.
+   Layers apply in order, later ones win, a file named `.wh.foo` means
+   "delete `foo`" (which the system `tar` got wrong); the `tar` package;
+   tests against a real temporary folder, not a fake
 10. **The Command Line** — arguments, progress output, exit codes, the
     one file where every piece is finally wired together (and why it's
     the only file allowed to know about all of them), `npm link` so
     `oci-pull` works from anywhere
-11. **Running It for Real with runc** — pull `alpine`, `runc spec`, point
-    it at our folder, `runc run`, real captured output. Then a bigger
-    image with several layers and a deleted file, to prove Chapter 9
+11. **Running It for Real with runc** — Chapter 7 ran `alpine` roughly;
+    now a bigger image with several layers and a deleted file, to prove
+    Chapters 8 and 9, and what `runc spec`'s config actually controls
 12. **Getting to Production** — turning `.ts` into shippable `.js`, what
     `package.json` needs so others can install it, structured errors
     with exit codes, a lint step, and the honest list of what this tool

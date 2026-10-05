@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-29d905fa.js";
+            window.path_to_searchindex_js = "searchindex-941a26d0.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-b48846b6.js"></script>
+        <script src="toc-f5958a6c.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -184,6 +184,23 @@ than you’d guess, so the tests are worth writing. And it produces the
 value every later chapter starts from: a <code>Reference</code>.</p>
 <p>Everything in this chapter goes into your project. Run <code>npm run check</code>
 at the end; it should be green.</p>
+<h2 id="where-we-are"><a class="header" href="#where-we-are">Where we are</a></h2>
+<p>Pulling an image takes six stages. This chapter’s is marked ▶:</p>
+<ul>
+<li>▶ <strong>1. Read the image name</strong> (this chapter)</li>
+<li>· 2. Ask the registry, get a token (Ch4–5)</li>
+<li>· 3. Read the manifest, pick the platform (Ch6)</li>
+<li>· 4. Download the layers, check them (Ch7; faster in Ch8)</li>
+<li>· 5. Unpack them into a folder (Ch7 roughly; properly in Ch9)</li>
+<li>· 6. Run it with runc (Ch7; more in Ch11)</li>
+</ul>
+<p>Every later stage starts from the name: the registry to call, the repository to ask about, the tag or digest to fetch. Get it wrong here, and every request after it goes to the wrong place.</p>
+<p>By the end of this chapter you can:</p>
+<ul>
+<li>Turn anything a user types (<code>alpine</code>, <code>ghcr.io/x/y:1.0</code>, <code>alpine@sha256:...</code>) into its full, exact form.</li>
+<li>Refuse a bad name with a clear message, before any network call.</li>
+<li>Write and run your first real tests in TypeScript.</li>
+</ul>
 <h2 id="the-rules-from-the-source"><a class="header" href="#the-rules-from-the-source">The rules, from the source</a></h2>
 <p>The rules aren’t invented — they’re in the <code>distribution/reference</code>
 package that Docker and every other registry client uses. Here’s the

@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-29d905fa.js";
+            window.path_to_searchindex_js = "searchindex-941a26d0.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-b48846b6.js"></script>
+        <script src="toc-f5958a6c.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -224,6 +224,19 @@ $ sudo runc run --bundle . demo
 / # cat /etc/alpine-release
 3.20.3
 </code></pre>
+<h2 id="the-stages"><a class="header" href="#the-stages">The stages</a></h2>
+<p>Pulling an image takes six stages. Every chapter opens with this list,
+marked to show where it fits:</p>
+<ol>
+<li>Read the image name (Chapter 3)</li>
+<li>Ask the registry, get a token (Chapters 4–5)</li>
+<li>Read the manifest, pick the platform (Chapter 6)</li>
+<li>Download the layers, check them (Chapter 7; faster in Chapter 8)</li>
+<li>Unpack them into a folder (Chapter 7 roughly; properly in Chapter 9)</li>
+<li>Run it with runc (Chapter 7; more in Chapter 11)</li>
+</ol>
+<p>Chapter 7 is where it all first works end to end, with two honest
+shortcuts. Each later chapter replaces one shortcut with the real thing.</p>
 <h2 id="table-of-contents"><a class="header" href="#table-of-contents">Table of contents</a></h2>
 <ol>
 <li><strong>Why Build an Image Puller</strong> — what actually happens during
@@ -254,24 +267,29 @@ JSON; TypeScript has no idea what’s in it and neither should you.
 <code>zod</code> turns “some JSON” into “a value with a known shape, or a clear
 error.” One server reply can be one of two shapes (a manifest, or a
 list of manifests for different CPUs); picking the right one.</li>
-<li><strong>Downloading One Layer</strong> — streams (read a little, write a little,
-never hold 200 MB in memory), computing the checksum <em>while</em> the bytes
-go by, refusing anything whose checksum doesn’t match. A content
-store: files named after their own checksum. <em>One class, one job.</em></li>
-<li><strong>Downloading Many Layers at Once</strong> — <code>Promise.all</code>, why “all at
-once” needs a limit, writing a small limiter ourselves (first generic
-function, explained plainly), cancelling with <code>AbortController</code>, retry
-with backoff, and faking the <em>clock</em> so retry tests take milliseconds</li>
-<li><strong>Unpacking Layers into a Folder</strong> — layers apply in order, later
-ones win, a file named <code>.wh.foo</code> means “delete <code>foo</code>”; the <code>tar</code>
-package; tests against a real temporary folder, not a fake</li>
+<li><strong>The Whole Pull, Rough Version</strong> — the first time the tool pulls an
+image end to end and you run it with <code>runc</code>. Streams (read a little,
+write a little, never hold 200 MB in memory), computing the checksum
+<em>while</em> the bytes go by, refusing anything whose checksum doesn’t
+match. A content store: files named after their own checksum. <em>One
+class, one job.</em> Two honest shortcuts, each replaced later: layers
+download one at a time, and the system’s <code>tar</code> command unpacks them.</li>
+<li><strong>Downloading Many Layers at Once</strong> — replaces the one-at-a-time loop.
+<code>Promise.all</code>, why “all at once” needs a limit, writing a small limiter
+ourselves (first generic function, explained plainly), cancelling with
+<code>AbortController</code>, retry with backoff, and faking the <em>clock</em> so retry
+tests take milliseconds</li>
+<li><strong>Unpacking Layers into a Folder</strong> — replaces the system <code>tar</code> shortcut.
+Layers apply in order, later ones win, a file named <code>.wh.foo</code> means
+“delete <code>foo</code>” (which the system <code>tar</code> got wrong); the <code>tar</code> package;
+tests against a real temporary folder, not a fake</li>
 <li><strong>The Command Line</strong> — arguments, progress output, exit codes, the
 one file where every piece is finally wired together (and why it’s
 the only file allowed to know about all of them), <code>npm link</code> so
 <code>oci-pull</code> works from anywhere</li>
-<li><strong>Running It for Real with runc</strong> — pull <code>alpine</code>, <code>runc spec</code>, point
-it at our folder, <code>runc run</code>, real captured output. Then a bigger
-image with several layers and a deleted file, to prove Chapter 9</li>
+<li><strong>Running It for Real with runc</strong> — Chapter 7 ran <code>alpine</code> roughly;
+now a bigger image with several layers and a deleted file, to prove
+Chapters 8 and 9, and what <code>runc spec</code>’s config actually controls</li>
 <li><strong>Getting to Production</strong> — turning <code>.ts</code> into shippable <code>.js</code>, what
 <code>package.json</code> needs so others can install it, structured errors
 with exit codes, a lint step, and the honest list of what this tool
@@ -1758,6 +1776,23 @@ than you’d guess, so the tests are worth writing. And it produces the
 value every later chapter starts from: a <code>Reference</code>.</p>
 <p>Everything in this chapter goes into your project. Run <code>npm run check</code>
 at the end; it should be green.</p>
+<h2 id="where-we-are"><a class="header" href="#where-we-are">Where we are</a></h2>
+<p>Pulling an image takes six stages. This chapter’s is marked ▶:</p>
+<ul>
+<li>▶ <strong>1. Read the image name</strong> (this chapter)</li>
+<li>· 2. Ask the registry, get a token (Ch4–5)</li>
+<li>· 3. Read the manifest, pick the platform (Ch6)</li>
+<li>· 4. Download the layers, check them (Ch7; faster in Ch8)</li>
+<li>· 5. Unpack them into a folder (Ch7 roughly; properly in Ch9)</li>
+<li>· 6. Run it with runc (Ch7; more in Ch11)</li>
+</ul>
+<p>Every later stage starts from the name: the registry to call, the repository to ask about, the tag or digest to fetch. Get it wrong here, and every request after it goes to the wrong place.</p>
+<p>By the end of this chapter you can:</p>
+<ul>
+<li>Turn anything a user types (<code>alpine</code>, <code>ghcr.io/x/y:1.0</code>, <code>alpine@sha256:...</code>) into its full, exact form.</li>
+<li>Refuse a bad name with a clear message, before any network call.</li>
+<li>Write and run your first real tests in TypeScript.</li>
+</ul>
 <h2 id="the-rules-from-the-source"><a class="header" href="#the-rules-from-the-source">The rules, from the source</a></h2>
 <p>The rules aren’t invented — they’re in the <code>distribution/reference</code>
 package that Docker and every other registry client uses. Here’s the
@@ -2498,6 +2533,23 @@ the network unplugged.</p>
 <p>New in this chapter: <code>fetch</code>, Node’s built-in way to make an HTTP
 request; <code>async</code>/<code>await</code> in real code; and your first <em>mock</em>, a pretend
 function that also records how it was called.</p>
+<h2 id="where-we-are-1"><a class="header" href="#where-we-are-1">Where we are</a></h2>
+<p>Pulling an image takes six stages. This chapter’s is marked ▶:</p>
+<ul>
+<li>✓ 1. Read the image name (Ch3)</li>
+<li>▶ <strong>2. Ask the registry, get a token</strong> (this chapter)</li>
+<li>· 3. Read the manifest, pick the platform (Ch6)</li>
+<li>· 4. Download the layers, check them (Ch7; faster in Ch8)</li>
+<li>· 5. Unpack them into a folder (Ch7 roughly; properly in Ch9)</li>
+<li>· 6. Run it with runc (Ch7; more in Ch11)</li>
+</ul>
+<p>Every download in the rest of the book is an HTTP request to the registry. This chapter makes the first one, and sets up the thing that makes all later network code testable: a pretend HTTP client.</p>
+<p>By the end of this chapter you can:</p>
+<ul>
+<li>Call a real registry from TypeScript with <code>fetch</code>, <code>async</code> and <code>await</code>.</li>
+<li>Tell an open registry from one that wants a token.</li>
+<li>Test network code without touching the network.</li>
+</ul>
 <h2 id="what-the-front-door-says"><a class="header" href="#what-the-front-door-says">What the front door says</a></h2>
 <p>Chapter 1 showed that every registry answers on <code>/v2/</code>. Here’s what
 four real registries say when you knock without a token. <code>-D -</code> prints
@@ -3344,6 +3396,23 @@ time it’s called. By the end, one test plays the whole conversation,
 <p>New in this chapter: <code>Record</code>, optional parameters, <code>URL</code>, <code>unknown</code>,
 <code>Map</code>, named regex groups, <code>...</code> for copying and gathering, and
 <code>mockResolvedValueOnce</code>.</p>
+<h2 id="where-we-are-2"><a class="header" href="#where-we-are-2">Where we are</a></h2>
+<p>Pulling an image takes six stages. This chapter’s is marked ▶:</p>
+<ul>
+<li>✓ 1. Read the image name (Ch3)</li>
+<li>▶ <strong>2. Ask the registry, get a token</strong> (this chapter)</li>
+<li>· 3. Read the manifest, pick the platform (Ch6)</li>
+<li>· 4. Download the layers, check them (Ch7; faster in Ch8)</li>
+<li>· 5. Unpack them into a folder (Ch7 roughly; properly in Ch9)</li>
+<li>· 6. Run it with runc (Ch7; more in Ch11)</li>
+</ul>
+<p>Docker Hub and GitHub won’t hand out anything without a token, not even a public image. This chapter gets one, and uses it to fetch the manifest: the file that says which layers to download.</p>
+<p>By the end of this chapter you can:</p>
+<ul>
+<li>Get a token the way <code>docker pull</code> does, from any of the big registries.</li>
+<li>Fetch an image’s manifest as raw bytes.</li>
+<li>Fake a whole conversation of several requests in one test.</li>
+</ul>
 <h2 id="the-whole-dance-by-hand"><a class="header" href="#the-whole-dance-by-hand">The whole dance, by hand</a></h2>
 <p>Before writing code, do it with curl so you know exactly what the code
 has to do. It takes three requests.</p>
@@ -4533,6 +4602,23 @@ layers it will download in Chapter 7.</p>
 <p>New in this chapter: <code>zod</code>, <code>TextEncoder</code>/<code>TextDecoder</code>, <code>catch</code> with
 no variable, <code>find</code>/<code>map</code>/<code>filter</code> on arrays, <code>Set</code>, <code>...</code> inside an
 array, and the “I” in SOLID.</p>
+<h2 id="where-we-are-3"><a class="header" href="#where-we-are-3">Where we are</a></h2>
+<p>Pulling an image takes six stages. This chapter’s is marked ▶:</p>
+<ul>
+<li>✓ 1. Read the image name (Ch3)</li>
+<li>✓ 2. Ask the registry, get a token (Ch4–5)</li>
+<li>▶ <strong>3. Read the manifest, pick the platform</strong> (this chapter)</li>
+<li>· 4. Download the layers, check them (Ch7; faster in Ch8)</li>
+<li>· 5. Unpack them into a folder (Ch7 roughly; properly in Ch9)</li>
+<li>· 6. Run it with runc (Ch7; more in Ch11)</li>
+</ul>
+<p>The manifest is the list of layers to download, so the next three stages depend on reading it correctly. It comes from a server we don’t control, so nothing in it can be trusted until it’s checked.</p>
+<p>By the end of this chapter you can:</p>
+<ul>
+<li>Check any JSON from a server against a shape, and get a clear error naming the bad field.</li>
+<li>Go from a tag to the exact image manifest for your CPU.</li>
+<li>Print the layers the tool will download.</li>
+</ul>
 <h2 id="two-kinds-of-manifest-by-hand"><a class="header" href="#two-kinds-of-manifest-by-hand">Two kinds of manifest, by hand</a></h2>
 <p>Microsoft’s registry needs no token, so plain <code>curl</code> is enough. Ask for
 the <code>azurelinux/base/core:3.0</code> image, and say we can read Docker’s
@@ -5826,17 +5912,1210 @@ digest. If the second answer is another index, we refuse it.</p>
 </details>
 <h2 id="next-chapter-6"><a class="header" href="#next-chapter-6">Next chapter</a></h2>
 <p>We know exactly which layers to fetch, with their digest and size, but
-haven’t downloaded a byte of them. Chapter 7 downloads one layer. A
-layer can be hundreds of megabytes, so we can’t hold it in memory the
-way we held the manifest. It has to flow through: read a little, write
-a little. That’s a <em>stream</em>. While the bytes go by, we compute their
-<code>sha256</code> and refuse the file if it doesn’t match the digest. The same
-check closes this chapter’s first gap, for manifests. The files land
-in a small <em>content store</em>: a folder where every file is named after
-its own checksum, so a layer that’s already there never downloads
-twice.</p>
+haven’t downloaded a byte of them, and <code>./rootfs</code> is still empty.
+Chapter 7 closes that gap all the way: by its end, the tool pulls a
+whole image and you run Alpine with <code>runc</code>. A layer can be hundreds of
+megabytes, so we can’t hold it in memory the way we held the manifest.
+It has to flow through: read a little, write a little. That’s a
+<em>stream</em>. While the bytes go by, we compute their <code>sha256</code> and refuse
+the file if it doesn’t match the digest. The same check closes this
+chapter’s first gap, for manifests. Two parts will be rough on purpose
+(one layer at a time, and the system’s <code>tar</code> command to unpack), and
+Chapters 8 and 9 replace them.</p>
 <div style="break-before: page; page-break-before: always;"></div>
-<h1 id="downloading-one-layer"><a class="header" href="#downloading-one-layer">Downloading One Layer</a></h1>
+<h1 id="chapter-7-the-whole-pull-rough-version"><a class="header" href="#chapter-7-the-whole-pull-rough-version">Chapter 7: The Whole Pull, Rough Version</a></h1>
+<p>Chapter 6 ended knowing exactly which layers make up an image, and
+having downloaded none of them. This chapter changes that, all the way
+to the end. By the last page, the tool pulls a real image into a
+folder, and you start a shell inside it with <code>runc</code>.</p>
+<p>Getting there in one chapter means taking two shortcuts, and we’ll say
+so at the line where each one happens. Layers download one at a time
+(Chapter 8 does them all at once), and the system’s own <code>tar</code> command
+unpacks them (Chapter 9 replaces it with our own code, which gets one
+thing right that <code>tar</code> can’t). Everything else is built properly: a
+layer is never held in memory, every byte is checked against its
+fingerprint, and a layer you already have is never downloaded twice.</p>
+<p>New in this chapter: streams, <code>for await</code>, <code>async function*</code>, <code>pipeline</code>,
+<code>createHash</code>, <code>node:fs/promises</code>, <code>beforeEach</code>/<code>afterEach</code>, <code>execFile</code>,
+and <code>entries()</code>.</p>
+<h2 id="where-we-are-4"><a class="header" href="#where-we-are-4">Where we are</a></h2>
+<p>Pulling an image takes six stages. This chapter’s are marked ▶:</p>
+<ul>
+<li>✓ 1. Read the image name (Ch3)</li>
+<li>✓ 2. Ask the registry, get a token (Ch4–5)</li>
+<li>✓ 3. Read the manifest, pick the platform (Ch6)</li>
+<li>▶ <strong>4. Download the layers, check them</strong> (this chapter; faster in Ch8)</li>
+<li>▶ <strong>5. Unpack them into a folder</strong> (this chapter, roughly; properly in Ch9)</li>
+<li>▶ <strong>6. Run it with runc</strong> (this chapter; more in Ch11)</li>
+</ul>
+<p>Here’s the tool as Chapter 6 left it. We’ll pull into <code>/tmp/oci-demo/rootfs</code>
+from now on, outside your project, because <code>runc</code> will want a folder
+of its own:</p>
+<pre><code>$ npm start --silent -- alpine:3.20 /tmp/oci-demo/rootfs
+</code></pre>
+<pre><code>registry   docker.io
+repository library/alpine
+tag        3.20
+api        needs a token
+challenge  Bearer realm="https://auth.docker.io/token",service="registry.docker.io"
+platform   linux/amd64
+manifest   sha256:c64c687cbea9300178b30c95835354e34c4e4febc4badfe27102879de0483b5e
+config     sha256:bf8527eb54c3680e728d5b4b383a8ba730d72dae7236fbc8dff97ed6b224a731
+layer 1/1  sha256:25f1d6b1951ac8eb3740558fe94cb83d377bdadf95fd9f98b50d2e1b96130471  3.6 MB
+would pull into /tmp/oci-demo/rootfs
+</code></pre>
+<pre><code>$ ls /tmp/oci-demo/rootfs
+</code></pre>
+<pre><code>ls: cannot access '/tmp/oci-demo/rootfs': No such file or directory
+</code></pre>
+<p>“Would pull into”, and nothing there. That last line has been a
+placeholder since Chapter 3.</p>
+<p>Six chapters in, the tool can find any image on any registry, but it
+has never produced a single file. This chapter fills in the remaining
+three stages, roughly, so the tool works from start to finish. From
+here on, each chapter makes a working tool better, and you can run the
+result after every one.</p>
+<p>By the end of this chapter you can:</p>
+<ul>
+<li>Download a layer of any size without holding it in memory, and refuse
+it if a single byte is wrong.</li>
+<li>Keep downloads in a cache, so pulling the same image twice costs
+nothing.</li>
+<li>Pull <code>alpine</code> into a folder and start a shell inside it with <code>runc</code>.</li>
+</ul>
+<h2 id="a-layer-by-hand"><a class="header" href="#a-layer-by-hand">A layer, by hand</a></h2>
+<p>A layer lives at <code>/v2/&lt;repository&gt;/blobs/&lt;digest&gt;</code>. (“Blob” is the
+registry’s word for any stored file: a layer, a config, a manifest.)
+Ask Docker Hub for alpine’s one layer, with a token as in Chapter 5:</p>
+<pre><code>$ TOKEN=$(curl -sS "https://auth.docker.io/token?service=registry.docker.io&amp;scope=repository:library/alpine:pull" \
+    | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).token')
+$ curl -sS -o /dev/null -D - -H "Authorization: Bearer $TOKEN" \
+    https://registry-1.docker.io/v2/library/alpine/blobs/sha256:25f1d6b1951ac8eb3740558fe94cb83d377bdadf95fd9f98b50d2e1b96130471
+</code></pre>
+<pre><code>HTTP/2 307
+content-type: application/octet-stream
+content-length: 0
+location: https://production.cloudfront.docker.com/registry-v2/docker/registry/v2/blobs/sha256/25/25f1d6b1951ac8eb3740558fe94cb83d377bdadf95fd9f98b50d2e1b96130471/data?Expires=1791206293&amp;Signature=PK7Nry1a0n…
+</code></pre>
+<p>(Headers trimmed, and the <code>location</code> cut short.) Not the layer:
+<code>307</code> means “it’s over there.” The registry hands the actual download
+to a separate server built for big files (CloudFront, here), with a
+signed address that expires. Every big registry does something like
+this. <code>curl -L</code> follows the redirect:</p>
+<pre><code>$ curl -sS -L -H "Authorization: Bearer $TOKEN" https://registry-1.docker.io/v2/library/alpine/blobs/sha256:25f1d6b1951ac8eb3740558fe94cb83d377bdadf95fd9f98b50d2e1b96130471 -o layer.tar.gz
+$ wc -c layer.tar.gz
+</code></pre>
+<pre><code>3630321 layer.tar.gz
+</code></pre>
+<p>Exactly the <code>size</code> from the manifest. Now its fingerprint:</p>
+<pre><code>$ sha256sum layer.tar.gz
+</code></pre>
+<pre><code>25f1d6b1951ac8eb3740558fe94cb83d377bdadf95fd9f98b50d2e1b96130471  layer.tar.gz
+</code></pre>
+<p>Exactly the digest we asked for. This is the whole security story of
+container images in one line: the manifest names each layer by the
+hash of its bytes, so you can check what you got without trusting
+whoever sent it. And what’s inside?</p>
+<pre><code>$ tar -tzf layer.tar.gz | head
+</code></pre>
+<pre><code>bin/
+bin/arch
+bin/ash
+bin/base64
+bin/bbconfig
+bin/busybox
+bin/cat
+bin/chattr
+bin/chgrp
+bin/chmod
+</code></pre>
+<p>A compressed folder, as Chapter 1 said. Unpack it and you have Alpine’s
+files. Delete the download (<code>rm layer.tar.gz</code>). The code will do all of
+this itself.</p>
+<h2 id="the-plan-2"><a class="header" href="#the-plan-2">The plan</a></h2>
+<ol>
+<li><strong><code>RegistryClient.fetchBlob</code></strong>: ask for a blob, get its bytes as a
+stream.</li>
+<li><strong><code>src/store.ts</code></strong>: a <code>ContentStore</code>, a folder that keeps a file only
+if its bytes match its name.</li>
+<li><strong><code>src/pull.ts</code></strong>: <code>downloadLayer</code>, which fetches a layer into the
+store unless it’s already there.</li>
+<li><strong><code>src/resolve.ts</code></strong>: check manifests by their digest too, as
+promised in Chapter 6.</li>
+<li><strong><code>src/unpack.ts</code></strong>: the shortcut. Let the system’s <code>tar</code> unpack.</li>
+<li><strong><code>src/main.ts</code></strong>: put it together, and run it with <code>runc</code>.</li>
+</ol>
+<h2 id="step-1-ask-for-a-layer"><a class="header" href="#step-1-ask-for-a-layer">Step 1: ask for a layer</a></h2>
+<p>Every response so far was small, and we read it all at once with
+<code>arrayBuffer()</code>. A layer can be hundreds of megabytes. Reading it all
+at once means holding it all in memory, and a few big layers at once
+could take gigabytes.</p>
+<p>The fix is to handle the bytes as they arrive, a chunk at a time:
+read a chunk, deal with it, drop it, get the next one. Data you handle
+that way is a <strong>stream</strong>. A <code>Response</code> already gives you one: its
+<code>body</code>. Nothing is read until someone asks for the next chunk.</p>
+<p>How do you ask? With a loop:</p>
+<pre><code class="language-ts">for await (const chunk of response.body) {
+  // chunk is a Uint8Array: the next few kilobytes
+}
+</code></pre>
+<p><code>for await</code> is a <code>for</code> loop that waits for each item to arrive, like
+<code>async for</code> in Python. Anything you can loop over this way is an
+<strong>async iterable</strong>, and TypeScript’s name for its type is
+<code>AsyncIterable&lt;Uint8Array&gt;</code>: “something that hands out <code>Uint8Array</code>
+chunks, one at a time, when they’re ready.”</p>
+<p>Add to <code>RegistryClient</code> in <code>src/registry.ts</code>, below <code>fetchManifest</code>:</p>
+<pre><code class="language-ts">  // A layer (or any blob), as a stream of chunks: nothing is held in memory.
+  // Registries usually answer with a redirect to a download server;
+  // fetch follows it on its own.
+  async fetchBlob(repository: string, digest: string): Promise&lt;AsyncIterable&lt;Uint8Array&gt;&gt; {
+    const url = `${this.baseUrl}${repository}/blobs/${digest}`
+    const response = await this.authorizedGet(url, `repository:${repository}:pull`, {})
+    if (response.status !== 200 || response.body === null) {
+      throw new RegistryError(url, response.status, "unexpected status")
+    }
+    return response.body
+  }
+</code></pre>
+<p>Most of the work is done by Chapter 5’s <code>authorizedGet</code>: the <code>401</code>,
+the token, the retry, and reusing a token we already have. The method
+returns the stream itself, not its bytes. The caller decides where the
+bytes go.</p>
+<p><code>fetch</code> follows the <code>307</code> on its own, like <code>curl -L</code>. And it does one
+more careful thing: it drops our <code>authorization</code> header when the
+redirect goes to a different server. Our Docker Hub token is none of
+CloudFront’s business.</p>
+<p><code>response.body</code> can be <code>null</code> (a response with no body at all), so
+that’s checked along with the status. After the <code>if</code>, the compiler
+knows it isn’t <code>null</code>.</p>
+<p>To test it, a test needs to read a whole stream into a string. Add a
+helper at the bottom of <code>src/registry.test.ts</code>:</p>
+<pre><code class="language-ts">// Read a whole stream into one string. Fine in a test, where it's tiny.
+async function textOf(chunks: AsyncIterable&lt;Uint8Array&gt;): Promise&lt;string&gt; {
+  let text = ""
+  // TextDecoder with { stream: true } copes with a character split across chunks.
+  const decoder = new TextDecoder()
+  for await (const chunk of chunks) {
+    text += decoder.decode(chunk, { stream: true })
+  }
+  return text + decoder.decode()
+}
+</code></pre>
+<p><code>{ stream: true }</code> matters for real text. A character like <code>é</code> is two
+bytes in UTF-8, and a chunk can end between them. With <code>stream: true</code>
+the decoder holds on to half a character until the next chunk arrives.
+The final <code>decode()</code> with no argument hands over anything still held.</p>
+<p>And the test, below it. A <code>new Response("hello")</code> has a real stream as
+its body, so <code>replyingInTurn</code> from Chapter 5 works as is:</p>
+<pre><code class="language-ts">describe("RegistryClient.fetchBlob", () =&gt; {
+  it("streams the blob, getting a token first if asked", async () =&gt; {
+    // A 401 first, then the blob: the same dance as for a manifest.
+    const { http, get } = replyingInTurn(unauthorized(), new Response("hello"))
+    const client = new RegistryClient(http, "docker.io", tokenGiving("abc"))
+
+    const chunks = await client.fetchBlob("library/alpine", "sha256:2cf24dba")
+
+    expect(await textOf(chunks)).toBe("hello")
+    expect(get).toHaveBeenNthCalledWith(
+      2,
+      "https://registry-1.docker.io/v2/library/alpine/blobs/sha256:2cf24dba",
+      expect.objectContaining({ authorization: "Bearer abc" }),
+    )
+  })
+})
+</code></pre>
+<blockquote>
+<p><strong>Your turn.</strong> A second test in the same <code>describe</code>: “throws
+RegistryError when the blob isn’t there”. The fake answers
+<code>new Response(null, { status: 404 })</code> (use <code>replyingWith</code>), the
+registry is <code>"ghcr.io"</code>, and the client gets <code>neverAuth</code>, since no
+token should be asked for.</p>
+</blockquote>
+<p>Here it is:</p>
+<pre><code class="language-ts">  it("throws RegistryError when the blob isn't there", async () =&gt; {
+    const { http } = replyingWith(new Response(null, { status: 404 }))
+
+    // An async failure: await the expect, or the test ends too early.
+    await expect(new RegistryClient(http, "ghcr.io", neverAuth).fetchBlob("x/y", "sha256:2cf24dba")).rejects.toThrow(
+      RegistryError,
+    )
+  })
+</code></pre>
+<pre><code>$ npm run check
+</code></pre>
+<pre><code> Test Files  6 passed (6)
+      Tests  55 passed (55)
+</code></pre>
+<h2 id="step-2-a-store-that-checks-what-it-keeps"><a class="header" href="#step-2-a-store-that-checks-what-it-keeps">Step 2: a store that checks what it keeps</a></h2>
+<p>The bytes need to go somewhere, and they need checking on the way.
+Both jobs belong to one small class. A <strong>content store</strong> is a folder
+where every file is named after the sha256 of its own bytes. That
+simple rule buys three things:</p>
+<ul>
+<li><strong>Checking for free.</strong> A file named <code>25f1d6b1…</code> that doesn’t hash to
+<code>25f1d6b1…</code> is impossible by construction, because the store refuses
+to keep it.</li>
+<li><strong>A cache for free.</strong> If the file is there, it’s the right bytes. Its
+name proves it. So a second pull skips the download.</li>
+<li><strong>Sharing for free.</strong> Two images built on the same Alpine layer store
+it once, because it has one name.</li>
+</ul>
+<p>Docker, containerd and every other runtime keep layers this way.</p>
+<p>The class has one job: keep a file only if its bytes match its name.
+It doesn’t know about registries, tokens or manifests. That’s the
+<em>single responsibility principle</em>, the “S” in SOLID: one class, one
+reason to change.</p>
+<p>New file, <code>src/store.ts</code>. First the error type and the easy parts:</p>
+<pre><code class="language-ts">import { createHash } from "node:crypto"
+import { createWriteStream } from "node:fs"
+import { access, mkdir, rename, rm } from "node:fs/promises"
+import { join } from "node:path"
+import { pipeline } from "node:stream/promises"
+import type { Descriptor } from "./manifest.ts"
+
+export class StoreError extends Error {
+  constructor(problem: string) {
+    super(`store: ${problem}`)
+    this.name = "StoreError"
+  }
+}
+
+// A folder of files, each named after the sha256 of its own bytes.
+// Its one job: keep a file only if its bytes match its name.
+export class ContentStore {
+  private readonly root: string
+
+  constructor(root: string) {
+    this.root = root
+  }
+
+  // Where a blob lives: &lt;root&gt;/sha256/&lt;hex&gt;.
+  pathFor(digest: string): string {
+    // Only sha256 is supported; anything else is refused, not guessed.
+    if (!digest.startsWith("sha256:")) {
+      throw new StoreError(`unsupported digest ${digest}`)
+    }
+    return join(this.root, "sha256", digest.slice("sha256:".length))
+  }
+
+  // Is this blob already here? access() throws if the file is missing.
+  async has(digest: string): Promise&lt;boolean&gt; {
+    try {
+      await access(this.pathFor(digest))
+      return true
+    } catch {
+      return false
+    }
+  }
+}
+</code></pre>
+<p>The imports are all from Node itself, no packages. Each <code>node:</code> module
+is one area of the standard library, like Go’s <code>crypto/sha256</code>, <code>os</code>
+and <code>path/filepath</code>. <code>node:fs/promises</code> holds the file functions that
+return Promises, so you can <code>await</code> them. <code>join</code> builds a path with the
+right separators, like <code>filepath.Join</code>.</p>
+<p>The digest’s format was already checked by zod in Chapter 6, so by now
+it can’t contain a <code>/</code> or <code>..</code>. But <code>DIGEST_PATTERN</code> allows other hash
+algorithms (<code>sha512:</code>), and we only compute sha256. So <code>pathFor</code>
+refuses the others instead of storing them under a name it can’t check.</p>
+<p>Now the method that does the real work. Add it below <code>has</code>:</p>
+<pre><code class="language-ts">  // Stream `chunks` to disk, hashing and counting them on the way.
+  // Returns the file's path, or throws if the bytes aren't what
+  // `expected` says. A bad file never appears under its real name.
+  async put(expected: Descriptor, chunks: AsyncIterable&lt;Uint8Array&gt;): Promise&lt;string&gt; {
+    const path = this.pathFor(expected.digest)
+    const partial = `${path}.partial`
+    await mkdir(join(this.root, "sha256"), { recursive: true })
+
+    const hash = createHash("sha256")
+    let size = 0
+    try {
+      await pipeline(
+        chunks,
+        // A step in the middle: sees every chunk, passes it on unchanged.
+        async function* (source: AsyncIterable&lt;Uint8Array&gt;): AsyncGenerator&lt;Uint8Array&gt; {
+          for await (const chunk of source) {
+            size += chunk.length
+            // Stop early: never write more than the manifest promised.
+            if (size &gt; expected.size) {
+              throw new StoreError(`${expected.digest} is bigger than ${expected.size} bytes`)
+            }
+            hash.update(chunk)
+            yield chunk
+          }
+        },
+        createWriteStream(partial),
+      )
+      const actual = `sha256:${hash.digest("hex")}`
+      if (size !== expected.size || actual !== expected.digest) {
+        throw new StoreError(`expected ${expected.digest} (${expected.size} bytes), got ${actual} (${size} bytes)`)
+      }
+    } catch (err) {
+      // Whatever went wrong, don't leave half a file behind.
+      await rm(partial, { force: true })
+      throw err
+    }
+    // rename() is all or nothing: the file appears complete, or not at all.
+    await rename(partial, path)
+    return path
+  }
+</code></pre>
+<p>This is the heart of the chapter, so piece by piece.</p>
+<p><strong><code>pipeline(source, step, destination)</code></strong> connects streams in a row
+and pushes every chunk through, start to end, like <code>a | b | c</code> in a
+shell. It waits when the destination is slow: if the disk falls behind,
+it stops asking the network for more until the disk catches up, so
+chunks don’t pile up in memory. It also cleans up: if any part fails,
+it stops all of them, and the Promise it returns rejects with that
+error.</p>
+<p><strong><code>async function*</code></strong> is a new kind of function: a <em>generator</em>. A
+normal function returns once. A generator can hand out many values, one
+at a time, with <code>yield</code>, like a Python generator. The <code>async</code> makes it
+able to <code>await</code> between them. Here it takes in the chunks
+(<code>for await ... of source</code>) and passes each one on (<code>yield chunk</code>)
+after looking at it. That makes it a step in the middle of the pipe.
+Its return type, <code>AsyncGenerator&lt;Uint8Array&gt;</code>, says “hands out
+<code>Uint8Array</code>s, one at a time.”</p>
+<p><strong><code>createHash("sha256")</code></strong> makes a hash you feed in pieces:
+<code>hash.update(chunk)</code> for each chunk, then <code>hash.digest("hex")</code> once at
+the end for the answer. Feeding it chunk by chunk gives the same result
+as hashing the whole file at once. So the checksum is ready the moment
+the last byte is written, and the file is never read twice.</p>
+<p><strong>Counting bytes as they arrive</strong> is about more than tidiness. A
+broken or hostile server could send bytes forever. The manifest said
+3,630,321 bytes, so byte 3,630,322 is an error, and we stop right
+there, not when the disk is full.</p>
+<p><strong><code>.partial</code>, then <code>rename</code>.</strong> The bytes go to <code>&lt;digest&gt;.partial</code>
+first, and only get their real name once they’re checked. Renaming a
+file is all or nothing: there is never a moment when the real name
+points at half a file. If the program crashes midway, there’s a
+<code>.partial</code> left over, but <code>has()</code> will never mistake it for the real
+thing. And if anything fails, the <code>catch</code> deletes the <code>.partial</code>
+(<code>force: true</code> means “and don’t complain if it isn’t there”), then
+re-throws, so the caller still sees the error.</p>
+<p><code>hash</code> and <code>size</code> are declared outside the generator but changed inside
+it. A function can use the variables around where it was written.
+That’s a <em>closure</em>, and Go and Python have them too.</p>
+<h3 id="testing-against-a-real-folder"><a class="header" href="#testing-against-a-real-folder">Testing against a real folder</a></h3>
+<p>The store’s job is files, so its tests use a real folder, a fresh
+empty one per test, in the system’s temp area. Faking the disk would
+mean faking <code>mkdir</code>, <code>rename</code>, <code>rm</code> and write streams, and the fakes
+would be more code than the store.</p>
+<p>Two test files will need a temp folder (Step 3 adds the second). So,
+as with <code>fake-http.ts</code> and <code>test-manifests.ts</code>, the helper gets its own
+file from the start. Create <code>src/temp-folder.ts</code>:</p>
+<pre><code class="language-ts">import { mkdtemp, rm } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { afterEach, beforeEach } from "vitest"
+
+// Call inside a describe(): every test gets a fresh, empty folder, and it's
+// deleted afterwards. The folder changes per test, so this returns a
+// function to ask for the current one, not the path itself.
+export function useTempFolder(): () =&gt; string {
+  let folder = ""
+  beforeEach(async () =&gt; {
+    folder = await mkdtemp(join(tmpdir(), "oci-pull-test-"))
+  })
+  afterEach(async () =&gt; {
+    await rm(folder, { recursive: true, force: true })
+  })
+  return () =&gt; folder
+}
+</code></pre>
+<p><code>beforeEach</code> and <code>afterEach</code> are Vitest’s hooks: functions that run
+before and after every test in the <code>describe</code> they’re called from, like
+<code>setUp</code> and <code>tearDown</code> in Python’s <code>unittest</code>. <code>mkdtemp</code> makes a folder
+with a random ending (<code>oci-pull-test-Xb3kQ9</code>), so tests never collide.</p>
+<p>The return type <code>() =&gt; string</code> is “a function that takes nothing and
+returns a string.” Why not return the path itself? Because when
+<code>useTempFolder()</code> runs, no test has started yet, so there’s no folder.
+A new one is made before each test. The function you get back reads
+the variable at the moment you call it, so it always gives the current
+test’s folder.</p>
+<p>The test data too, since Step 3 needs it as well. Create
+<code>src/test-blobs.ts</code>:</p>
+<pre><code class="language-ts">// A tiny blob for tests: the five bytes "hello", and their real sha256
+// (from `echo -n hello | sha256sum`).
+export const HELLO = {
+  mediaType: "text/plain",
+  digest: "sha256:2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+  size: 5,
+}
+
+// Text, sent as separate chunks the way a download arrives.
+// `async function*` makes something you can loop over with `for await`.
+export async function* chunksOf(...parts: string[]): AsyncGenerator&lt;Uint8Array&gt; {
+  for (const part of parts) {
+    yield new TextEncoder().encode(part)
+  }
+}
+</code></pre>
+<p><code>chunksOf("hel", "lo")</code> is a fake download: the same kind of thing as
+<code>response.body</code>, handing out two chunks. That’s a fake network made
+from five lines, with no <code>vi.fn</code> needed. The store only asks for “an
+async iterable of chunks,” and a generator is one.</p>
+<p>Now <code>src/store.test.ts</code>:</p>
+<pre><code class="language-ts">import { readdir, readFile } from "node:fs/promises"
+import { join } from "node:path"
+import { describe, expect, it } from "vitest"
+import { ContentStore, StoreError } from "./store.ts"
+import { useTempFolder } from "./temp-folder.ts"
+import { chunksOf, HELLO } from "./test-blobs.ts"
+
+describe("ContentStore", () =&gt; {
+  const root = useTempFolder()
+
+  it("keeps a blob under its own digest", async () =&gt; {
+    const store = new ContentStore(root())
+
+    const path = await store.put(HELLO, chunksOf("hel", "lo"))
+
+    expect(path).toBe(join(root(), "sha256", "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"))
+    expect(await readFile(path, "utf8")).toBe("hello")
+    expect(await store.has(HELLO.digest)).toBe(true)
+  })
+
+  it("refuses bytes that don't match the digest, and leaves nothing behind", async () =&gt; {
+    const store = new ContentStore(root())
+
+    // Same length, different bytes: "jello" is not "hello".
+    await expect(store.put(HELLO, chunksOf("jello"))).rejects.toThrow(StoreError)
+
+    expect(await store.has(HELLO.digest)).toBe(false)
+    expect(await readdir(join(root(), "sha256"))).toEqual([])
+  })
+})
+</code></pre>
+<p>The second test checks the cleanup: after a refused download, the
+folder is empty. <code>readdir</code> lists a folder’s files, like <code>os.ReadDir</code>.</p>
+<p>Two more checks, then run them.</p>
+<blockquote>
+<p><strong>Your turn.</strong> Two tests inside the same <code>describe</code>. “stops as soon as
+there are more bytes than promised”: <code>put(HELLO, chunksOf("hello", " and much more"))</code>
+rejects with <code>"is bigger than 5 bytes"</code>. “refuses a digest that isn’t
+sha256”: <code>store.pathFor("sha512:abcd")</code> throws
+<code>"unsupported digest sha512:abcd"</code> (this one isn’t async).</p>
+</blockquote>
+<p>Here it is:</p>
+<pre><code class="language-ts">  it("stops as soon as there are more bytes than promised", async () =&gt; {
+    const store = new ContentStore(root())
+
+    await expect(store.put(HELLO, chunksOf("hello", " and much more"))).rejects.toThrow("is bigger than 5 bytes")
+  })
+
+  it("refuses a digest that isn't sha256", () =&gt; {
+    const store = new ContentStore(root())
+
+    expect(() =&gt; store.pathFor("sha512:abcd")).toThrow("unsupported digest sha512:abcd")
+  })
+</code></pre>
+<pre><code>$ npm run check
+</code></pre>
+<pre><code> Test Files  7 passed (7)
+      Tests  59 passed (59)
+</code></pre>
+<p>Now see the cleanup test earn its place. In <code>put</code>, delete the line
+<code>await rm(partial, { force: true })</code> (and <code>rm</code> from the import, or the
+compiler complains it’s unused), then:</p>
+<pre><code>$ npm test
+</code></pre>
+<pre><code> FAIL  src/store.test.ts &gt; ContentStore &gt; refuses bytes that don't match the digest, and leaves nothing behind
+AssertionError: expected [ Array(1) ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824.partial",
++ ]
+
+ ❯ src/store.test.ts:28:51
+     26|
+     27|     expect(await store.has(HELLO.digest)).toBe(false)
+     28|     expect(await readdir(join(root(), "sha256"))).toEqual([])
+       |                                                   ^
+     29|   })
+     30|
+
+ Test Files  1 failed | 6 passed (7)
+      Tests  1 failed | 58 passed (59)
+</code></pre>
+<p>(Separator lines trimmed.) Line 27 still passed: the bad bytes never
+got the real name, thanks to <code>.partial</code> and <code>rename</code>. But line 28
+caught the leftover. Without the cleanup, every failed download would
+leave a dead file in your cache forever. Put the line (and the import)
+back.</p>
+<h2 id="step-3-download-a-layer-into-the-store"><a class="header" href="#step-3-download-a-layer-into-the-store">Step 3: download a layer into the store</a></h2>
+<p>Now join the two: fetch a layer from the registry, and put it in the
+store, unless it’s already there.</p>
+<p>The function only needs one thing from the registry: <code>fetchBlob</code>. That
+calls for the same move as <code>ManifestSource</code> in Chapter 6.</p>
+<blockquote>
+<p><strong>Your turn.</strong> Create <code>src/pull.ts</code> with an exported interface
+<code>BlobSource</code> that has one method, <code>fetchBlob</code>, with the same
+signature as <code>RegistryClient.fetchBlob</code>. Then export a type
+<code>LayerResult</code> that is either the string <code>"downloaded"</code> or the string
+<code>"cached"</code>.</p>
+</blockquote>
+<p>Here it is:</p>
+<pre><code class="language-ts">import type { Descriptor } from "./manifest.ts"
+import type { ContentStore } from "./store.ts"
+
+// All downloadLayer needs from a registry: one method, as in Chapter 6.
+export interface BlobSource {
+  fetchBlob(repository: string, digest: string): Promise&lt;AsyncIterable&lt;Uint8Array&gt;&gt;
+}
+
+// What happened to one layer, for the progress line.
+export type LayerResult = "downloaded" | "cached"
+</code></pre>
+<p><code>"downloaded" | "cached"</code> is a one-of type made of exact strings. A
+function returning a <code>LayerResult</code> can return those two strings and no
+others. A typo like <code>"cahced"</code> is a compile error, not a bug.</p>
+<p>The function itself, below:</p>
+<pre><code class="language-ts">// Make sure one layer is in the store. If it's already there (its name
+// is its checksum, so it can only be the right bytes), skip the download.
+export async function downloadLayer(
+  source: BlobSource,
+  store: ContentStore,
+  repository: string,
+  layer: Descriptor,
+): Promise&lt;LayerResult&gt; {
+  if (await store.has(layer.digest)) {
+    return "cached"
+  }
+  await store.put(layer, await source.fetchBlob(repository, layer.digest))
+  return "downloaded"
+}
+</code></pre>
+<p>Five lines, because the store does the hard part. Notice that nothing
+here reads a chunk. The stream goes straight from <code>fetchBlob</code> into
+<code>put</code>, and the bytes flow network → hash → disk without this function
+ever touching them.</p>
+<p>For the test, a fake <code>BlobSource</code> whose every blob is <code>"hello"</code>, with
+its mock kept so a test can count the calls. It’s the same shape as
+Chapter 5’s <code>FakeHttp</code>. Create <code>src/pull.test.ts</code>:</p>
+<pre><code class="language-ts">import { type Mock, describe, expect, it, vi } from "vitest"
+import { type BlobSource, downloadLayer } from "./pull.ts"
+import { ContentStore } from "./store.ts"
+import { useTempFolder } from "./temp-folder.ts"
+import { chunksOf, HELLO } from "./test-blobs.ts"
+
+// The fake, and its mock method so a test can check the calls.
+interface FakeSource {
+  source: BlobSource
+  fetchBlob: Mock&lt;BlobSource["fetchBlob"]&gt;
+}
+
+// A pretend registry whose every blob is the bytes of "hello".
+function helloSource(): FakeSource {
+  const fetchBlob = vi.fn&lt;BlobSource["fetchBlob"]&gt;(async () =&gt; chunksOf("hello"))
+  return { source: { fetchBlob }, fetchBlob }
+}
+
+describe("downloadLayer", () =&gt; {
+  const folder = useTempFolder()
+
+  it("downloads a layer that isn't in the store", async () =&gt; {
+    const { source, fetchBlob } = helloSource()
+    const store = new ContentStore(folder())
+
+    expect(await downloadLayer(source, store, "library/alpine", HELLO)).toBe("downloaded")
+    expect(fetchBlob).toHaveBeenCalledWith("library/alpine", HELLO.digest)
+    expect(await store.has(HELLO.digest)).toBe(true)
+  })
+})
+</code></pre>
+<p>The store here is the real one, in a temp folder. Only the network is
+faked. That keeps the test honest about what really matters: the bytes
+end up in the store, and get checked on the way.</p>
+<blockquote>
+<p><strong>Your turn.</strong> “skips a layer that’s already there”: download <code>HELLO</code>
+once, then a second <code>downloadLayer</code> call returns <code>"cached"</code>, and
+<code>fetchBlob</code> was called only once in total.</p>
+</blockquote>
+<p>Here it is:</p>
+<pre><code class="language-ts">  it("skips a layer that's already there", async () =&gt; {
+    const { source, fetchBlob } = helloSource()
+    const store = new ContentStore(folder())
+    await downloadLayer(source, store, "library/alpine", HELLO)
+
+    // The second time, the store already has it: no second download.
+    expect(await downloadLayer(source, store, "library/alpine", HELLO)).toBe("cached")
+    expect(fetchBlob).toHaveBeenCalledTimes(1)
+  })
+</code></pre>
+<pre><code>$ npm run check
+</code></pre>
+<pre><code> Test Files  8 passed (8)
+      Tests  61 passed (61)
+</code></pre>
+<h2 id="step-4-check-manifests-too"><a class="header" href="#step-4-check-manifests-too">Step 4: check manifests too</a></h2>
+<p>Chapter 6 left a gap: when we fetch a manifest <em>by digest</em> (the entry
+picked from an index, or a user’s <code>alpine@sha256:...</code>), we never check
+that the bytes really hash to that digest. Layers are now checked, so
+a server could still swap the manifest instead, pointing at different
+layers. Close that door.</p>
+<p>Hashing bytes we already hold in memory takes one line. Two files will
+want it (<code>resolve.ts</code> now, and the tests), so it gets its own small
+file, <code>src/digest.ts</code>:</p>
+<pre><code class="language-ts">import { createHash } from "node:crypto"
+
+// "sha256:&lt;hex&gt;" for these bytes: the same fingerprint a registry uses.
+export function sha256Digest(bytes: Uint8Array): string {
+  return `sha256:${createHash("sha256").update(bytes).digest("hex")}`
+}
+</code></pre>
+<p>That’s <code>createHash</code> again, fed all the bytes in one <code>update</code> this time.
+(The store can’t use this function, because it never holds all the
+bytes at once. Feeding the hash chunk by chunk is the whole point
+there.)</p>
+<p>In <code>src/resolve.ts</code>, add the check at the bottom:</p>
+<pre><code class="language-ts">// Are these the bytes we asked for? A digest names exact bytes, so a
+// server can't swap in a different manifest under the same name.
+function checkDigest(raw: RawManifest, digest: string): void {
+  const actual = sha256Digest(raw.bytes)
+  if (actual !== digest) {
+    throw new ManifestError(`asked for ${digest}, got bytes for ${actual}`)
+  }
+}
+</code></pre>
+<p>Then use it in <code>resolveImage</code>. Right after the first <code>fetchManifest</code>:</p>
+<pre><code class="language-ts">  // Asked by digest? Then we know exactly which bytes to expect.
+  if (DIGEST_PATTERN.test(reference)) {
+    checkDigest(raw, reference)
+  }
+</code></pre>
+<p>and right after the second one, the entry picked from the index:</p>
+<pre><code class="language-ts">  checkDigest(rawImage, entry.digest)
+</code></pre>
+<p>and the imports at the top:</p>
+<pre><code class="language-ts">import { sha256Digest } from "./digest.ts"
+import { DIGEST_PATTERN } from "./reference.ts"
+</code></pre>
+<p>A tag (<code>3.20</code>) names nothing exact. It can move to a new image any
+time. So only digest requests can be checked, and <code>DIGEST_PATTERN</code>
+from Chapter 3 tells the two apart.</p>
+<p>Run the tests:</p>
+<pre><code>$ npm test
+</code></pre>
+<pre><code> FAIL  src/resolve.test.ts &gt; resolveImage &gt; follows an index to the entry for our platform
+ManifestError: manifest: asked for sha256:c64c687cbea9300178b30c95835354e34c4e4febc4badfe27102879de0483b5e, got bytes for sha256:7ff2162921815d7cc8cd13d13b4fdc7b4ce3e05c63ae8dc788dbc87c01d98f1c
+ ❯ checkDigest src/resolve.ts:54:11
+     52|   const actual = sha256Digest(raw.bytes)
+     53|   if (actual !== digest) {
+     54|     throw new ManifestError(`asked for ${digest}, got bytes for ${actu…
+       |           ^
+     55|   }
+     56| }
+ ❯ resolveImage src/resolve.ts:41:3
+ ❯ src/resolve.test.ts:37:20
+
+ FAIL  src/resolve.test.ts &gt; resolveImage &gt; refuses an index that points to another index
+AssertionError: expected [Function] to throw error including 'is another index, not an image' but got 'manifest: asked for sha256:c64c687cbe…'
+
+Expected: "is another index, not an image"
+Received: "manifest: asked for sha256:c64c687cbea9300178b30c95835354e34c4e4febc4badfe27102879de0483b5e, got bytes for sha256:c2a3b3a938ff2c7de4a0cee77973a95ac91f2bb5e52f82d5602927e716adceef"
+
+ ❯ src/resolve.test.ts:51:83
+
+ Test Files  1 failed | 7 passed (8)
+      Tests  2 failed | 59 passed (61)
+</code></pre>
+<p>(Separator lines and one code excerpt trimmed.) The new check works,
+and the first thing it catches is <em>our own test data</em>. In Chapter 6,
+<code>ALPINE_AMD64</code> had its annotations trimmed, and <code>bytesOf</code> wrote compact
+JSON. So the fixture’s bytes were never the bytes Docker Hub sent, and
+they hash to <code>7ff21629…</code>, not to the <code>c64c687c…</code> the index claims. The
+check is right and the fixture was quietly lying.</p>
+<p>The fix is to make the fixture the <em>real</em> bytes. Docker Hub’s JSON is
+indented with two spaces, and <code>JSON.stringify</code> can do exactly the same.
+Its third argument is the indent. In <code>src/test-manifests.ts</code>, change
+<code>bytesOf</code>:</p>
+<pre><code class="language-ts">// A value as the bytes a server would send: JSON text, UTF-8 encoded.
+// Docker Hub indents with two spaces; the `null, 2` does the same, so
+// ALPINE_AMD64 comes out byte for byte as Docker Hub sent it.
+export function bytesOf(value: unknown): Uint8Array {
+  return new TextEncoder().encode(JSON.stringify(value, null, 2))
+}
+</code></pre>
+<p>(The <code>null</code> in the middle is a slot for a filter function we don’t
+need.) Then replace <code>ALPINE_AMD64</code> with the complete manifest, every
+field in the order the server sent it, all annotations included:</p>
+<pre><code class="language-ts">// The image manifest the amd64 entry points to: every field, in the
+// server's order, so its bytes (see bytesOf) are exactly the real ones.
+export const ALPINE_AMD64 = {
+  schemaVersion: 2,
+  mediaType: OCI_IMAGE,
+  config: {
+    mediaType: "application/vnd.oci.image.config.v1+json",
+    digest: "sha256:bf8527eb54c3680e728d5b4b383a8ba730d72dae7236fbc8dff97ed6b224a731",
+    size: 612,
+  },
+  layers: [
+    {
+      mediaType: "application/vnd.oci.image.layer.v1.tar+gzip",
+      digest: "sha256:25f1d6b1951ac8eb3740558fe94cb83d377bdadf95fd9f98b50d2e1b96130471",
+      size: 3630321,
+    },
+  ],
+  annotations: {
+    "com.docker.official-images.bashbrew.arch": "amd64",
+    "org.opencontainers.image.base.name": "scratch",
+    "org.opencontainers.image.created": "2026-04-16T23:53:23Z",
+    "org.opencontainers.image.revision": "0db70ae354ee747109ce0b9a0cfbcd3c907bc822",
+    "org.opencontainers.image.source":
+      "https://github.com/alpinelinux/docker-alpine.git#0db70ae354ee747109ce0b9a0cfbcd3c907bc822:x86_64",
+    "org.opencontainers.image.url": "https://hub.docker.com/_/alpine",
+    "org.opencontainers.image.version": "3.20.10",
+  },
+}
+</code></pre>
+<p>and update the comment at the top of the file to match:</p>
+<pre><code class="language-ts">// Real manifests for tests, copied from Docker Hub's alpine:3.20
+// (the index trimmed to a few entries; the amd64 manifest complete).
+</code></pre>
+<p>Copy those values exactly, because a single changed character gives a
+different hash. That’s the point.</p>
+<pre><code>$ npm test
+</code></pre>
+<pre><code> FAIL  src/resolve.test.ts &gt; resolveImage &gt; refuses an index that points to another index
+...
+      Tests  1 failed | 60 passed (61)
+</code></pre>
+<p>(Cut short.) One down. The amd64 fixture now hashes to exactly
+<code>c64c687c…</code>, the real digest, and the “follows an index” test passes
+with real bytes.</p>
+<p>The one still failing hands the alpine index’s bytes back under the
+amd64 digest. It was testing “an index inside an index,” but the
+digest check now catches the wrong bytes first. To test the inner-index
+rule, the outer index has to point at the inner one by its <em>true</em>
+digest. <code>sha256Digest</code> can compute that. Replace the test in
+<code>src/resolve.test.ts</code>:</p>
+<pre><code class="language-ts">  it("refuses an index that points to another index", async () =&gt; {
+    // An outer index whose amd64 entry is the alpine index itself.
+    // Its digest is computed, so the digest check passes and the
+    // "another index" check is what's tested.
+    const innerDigest = sha256Digest(bytesOf(ALPINE_INDEX))
+    const outer = {
+      schemaVersion: 2,
+      manifests: [{ mediaType: OCI_INDEX, digest: innerDigest, size: 1, platform: amd64 }],
+    }
+    const fetchManifest = vi
+      .fn&lt;ManifestSource["fetchManifest"]&gt;()
+      .mockResolvedValueOnce(raw(OCI_INDEX, outer, INDEX_DIGEST))
+      .mockResolvedValueOnce(raw(OCI_INDEX, ALPINE_INDEX, innerDigest))
+
+    // An async failure: await the expect, or the test ends too early.
+    await expect(resolveImage({ fetchManifest }, "library/alpine", "3.20", amd64)).rejects.toThrow(
+      "is another index, not an image",
+    )
+  })
+</code></pre>
+<p>with <code>import { sha256Digest } from "./digest.ts"</code> at the top.</p>
+<blockquote>
+<p><strong>Your turn.</strong> One more test, for the check itself: “refuses a
+manifest whose bytes don’t match the digest it was asked for”. Make
+<code>swapped</code>, a copy of <code>ALPINE_AMD64</code> with its layer’s <code>size</code> changed to
+<code>1</code> (use <code>...</code> as in Chapter 6). The fake answers the index first,
+then <code>swapped</code> <em>claiming</em> to be <code>AMD64_DIGEST</code>. Expect a rejection
+containing <code>`asked for ${AMD64_DIGEST}, got bytes for sha256:`</code>.</p>
+</blockquote>
+<p>Here it is:</p>
+<pre><code class="language-ts">  it("refuses a manifest whose bytes don't match the digest it was asked for", async () =&gt; {
+    // The right name, the wrong bytes: one layer's size changed.
+    const swapped = { ...ALPINE_AMD64, layers: [{ ...ALPINE_AMD64.layers[0], size: 1 }] }
+    const fetchManifest = vi
+      .fn&lt;ManifestSource["fetchManifest"]&gt;()
+      .mockResolvedValueOnce(raw(OCI_INDEX, ALPINE_INDEX, INDEX_DIGEST))
+      .mockResolvedValueOnce(raw(OCI_IMAGE, swapped, AMD64_DIGEST))
+
+    await expect(resolveImage({ fetchManifest }, "library/alpine", "3.20", amd64)).rejects.toThrow(
+      `asked for ${AMD64_DIGEST}, got bytes for sha256:`,
+    )
+  })
+</code></pre>
+<p>That’s exactly the attack the check exists for: a manifest that says
+the layer is a different size (or a different layer entirely), served
+under the trusted name.</p>
+<pre><code>$ npm run check
+</code></pre>
+<pre><code> Test Files  8 passed (8)
+      Tests  62 passed (62)
+</code></pre>
+<h2 id="step-5-the-shortcut-let-tar-unpack"><a class="header" href="#step-5-the-shortcut-let-tar-unpack">Step 5: the shortcut: let <code>tar</code> unpack</a></h2>
+<p>Now the first deliberate shortcut. Your system already has <code>tar</code>, and
+it can unpack a layer, so for now we run it as a separate program.</p>
+<p>Create <code>src/unpack.ts</code>:</p>
+<pre><code class="language-ts">import { execFile } from "node:child_process"
+import { mkdir } from "node:fs/promises"
+import { promisify } from "node:util"
+
+// execFile runs a program with a list of arguments (no shell in between,
+// so odd characters in a path can't do harm). promisify turns its
+// callback style into a function that returns a Promise.
+const run = promisify(execFile)
+
+// SHORTCUT, replaced in Chapter 9: let the system's tar unpack a layer.
+// It gets the files right, but not deletions between layers.
+export async function unpackWithSystemTar(layerFile: string, folder: string): Promise&lt;void&gt; {
+  await mkdir(folder, { recursive: true })
+  // -x extract, -z it's gzipped, -f from this file, -C into this folder.
+  await run("tar", ["-xzf", layerFile, "-C", folder])
+}
+</code></pre>
+<p><code>execFile</code> is Node’s <code>exec.Command(...).Run()</code> from Go, or
+<code>subprocess.run([...])</code> from Python. It passes the arguments as a list,
+straight to <code>tar</code>, with no shell to misread a space or a <code>;</code> in a path.</p>
+<p>Many older Node functions report back by calling a function you pass
+in (a <em>callback</em>) instead of returning a Promise. <code>promisify</code> wraps one
+of those so you can <code>await</code> it. If <code>tar</code> exits with an error, the
+Promise rejects.</p>
+<p><code>mkdir(folder, { recursive: true })</code> is <code>mkdir -p</code>: it creates parent
+folders too, and doesn’t complain if the folder exists.</p>
+<p>Why is this a shortcut and not the real thing? Two reasons, both fixed
+in Chapter 9. First, layers can <em>delete</em> files from the layers below
+them, using specially named marker files. <code>tar</code> knows nothing about
+that, so it unpacks the markers as ordinary files. Second, some layers
+aren’t gzipped (newer ones use a format called zstd). For <code>alpine</code>,
+neither matters, so the shortcut works.</p>
+<p>No test for this one. It’s three lines that call another program, and
+Chapter 9 replaces it with code that does get tested.</p>
+<pre><code>$ npm run check
+</code></pre>
+<pre><code> Test Files  8 passed (8)
+      Tests  62 passed (62)
+</code></pre>
+<h2 id="step-6-put-it-together"><a class="header" href="#step-6-put-it-together">Step 6: put it together</a></h2>
+<p>In <code>src/main.ts</code>, <code>describeImage</code> stops printing the layers. They now
+get one line each as they download, with the result. Replace it with:</p>
+<pre><code class="language-ts">// What we're about to pull: the platform, the manifest's digest, and
+// the config. Each layer gets its own line as it downloads.
+function describeImage(platform: Platform, resolved: ResolvedImage): string {
+  return [
+    `platform   ${formatPlatform(platform)}`,
+    `manifest   ${resolved.digest ?? "(not sent)"}`,
+    `config     ${resolved.manifest.config.digest}`,
+  ].join("\n")
+}
+</code></pre>
+<p>Then, in <code>main</code>, replace the <code>would pull into</code> line with the real
+thing:</p>
+<pre><code class="language-ts">    // Downloads go into a cache that outlives this run, so a layer that's
+    // already there is never downloaded twice.
+    const store = new ContentStore(join(homedir(), ".cache", "oci-pull"))
+    const { layers } = resolved.manifest
+    // ROUGH: one layer at a time. Chapter 8 downloads them all at once.
+    // entries() gives [position, item] pairs, like enumerate() in Python.
+    for (const [i, layer] of layers.entries()) {
+      const result = await downloadLayer(registry, store, ref.repository, layer)
+      console.log(`layer ${i + 1}/${layers.length}  ${layer.digest}  ${megabytes(layer.size)}  ${result}`)
+    }
+
+    // Unpack in order: each layer goes on top of the ones before it.
+    for (const layer of layers) {
+      await unpackWithSystemTar(store.pathFor(layer.digest), outputDir)
+    }
+    console.log(`unpacked   ${outputDir}`)
+</code></pre>
+<p>The store lives in <code>~/.cache/oci-pull</code>, the usual place on Linux for
+files a program can rebuild. <code>homedir()</code> is your home folder.</p>
+<p><code>registry</code> is passed as a <code>BlobSource</code>. It has a matching <code>fetchBlob</code>,
+so it fits, just as it fits <code>ManifestSource</code>. One object, seen through
+two small interfaces.</p>
+<p><code>for (const [i, layer] of layers.entries())</code> loops over position and
+item together. <code>[i, layer]</code> unpacks each pair into two names, the way
+<code>for i, layer in enumerate(layers)</code> does in Python.</p>
+<p>The order of the second loop matters. Layer 2 is unpacked on top of
+layer 1, so if both have <code>/etc/hosts</code>, layer 2’s copy wins. That’s how
+an image’s layers make one folder.</p>
+<blockquote>
+<p><strong>Your turn.</strong> Finish <code>main.ts</code>. Import <code>homedir</code> from <code>node:os</code>,
+<code>join</code> from <code>node:path</code>, <code>downloadLayer</code> from <code>./pull.ts</code>,
+<code>ContentStore</code> and <code>StoreError</code> from <code>./store.ts</code>, and
+<code>unpackWithSystemTar</code> from <code>./unpack.ts</code>. Then add <code>StoreError</code> to
+the errors the <code>catch</code> prints.</p>
+</blockquote>
+<p>Here it is:</p>
+<pre><code class="language-ts">import { homedir } from "node:os"
+import { join } from "node:path"
+import { AnonymousAuthenticator, AuthError } from "./auth.ts"
+import { FetchHttpClient } from "./http.ts"
+import { formatPlatform, hostPlatform, ManifestError, type Platform } from "./manifest.ts"
+import { downloadLayer } from "./pull.ts"
+import { InvalidReferenceError, parseReference, target } from "./reference.ts"
+import { type ApiCheck, RegistryClient, RegistryError } from "./registry.ts"
+import { resolveImage, type ResolvedImage } from "./resolve.ts"
+import { ContentStore, StoreError } from "./store.ts"
+import { unpackWithSystemTar } from "./unpack.ts"
+
+// ...
+
+  } catch (err) {
+    // Any of our own errors: print the message, exit 1.
+    if (
+      err instanceof InvalidReferenceError ||
+      err instanceof RegistryError ||
+      err instanceof AuthError ||
+      err instanceof ManifestError ||
+      err instanceof StoreError
+    ) {
+      console.error(err.message)
+      return 1
+    }
+    throw err
+  }
+</code></pre>
+<pre><code>$ npm run check
+</code></pre>
+<pre><code> Test Files  8 passed (8)
+      Tests  62 passed (62)
+</code></pre>
+<p>The order of <code>src/main.ts</code>, top to bottom: imports, <code>usage</code>,
+<code>describeApiCheck</code>, <code>describeImage</code>, <code>megabytes</code>, <code>main</code>.</p>
+<h2 id="try-it-3"><a class="header" href="#try-it-3">Try it</a></h2>
+<p>The moment six chapters have been building towards:</p>
+<pre><code>$ npm start --silent -- alpine:3.20 /tmp/oci-demo/rootfs
+</code></pre>
+<pre><code>registry   docker.io
+repository library/alpine
+tag        3.20
+api        needs a token
+challenge  Bearer realm="https://auth.docker.io/token",service="registry.docker.io"
+platform   linux/amd64
+manifest   sha256:c64c687cbea9300178b30c95835354e34c4e4febc4badfe27102879de0483b5e
+config     sha256:bf8527eb54c3680e728d5b4b383a8ba730d72dae7236fbc8dff97ed6b224a731
+layer 1/1  sha256:25f1d6b1951ac8eb3740558fe94cb83d377bdadf95fd9f98b50d2e1b96130471  3.6 MB  downloaded
+unpacked   /tmp/oci-demo/rootfs
+</code></pre>
+<p>Downloaded, checked, stored and unpacked. Run it again:</p>
+<pre><code>$ npm start --silent -- alpine:3.20 /tmp/oci-demo/rootfs
+</code></pre>
+<pre><code>registry   docker.io
+repository library/alpine
+tag        3.20
+api        needs a token
+challenge  Bearer realm="https://auth.docker.io/token",service="registry.docker.io"
+platform   linux/amd64
+manifest   sha256:c64c687cbea9300178b30c95835354e34c4e4febc4badfe27102879de0483b5e
+config     sha256:bf8527eb54c3680e728d5b4b383a8ba730d72dae7236fbc8dff97ed6b224a731
+layer 1/1  sha256:25f1d6b1951ac8eb3740558fe94cb83d377bdadf95fd9f98b50d2e1b96130471  3.6 MB  cached
+unpacked   /tmp/oci-demo/rootfs
+</code></pre>
+<p><code>cached</code>: the store already had a file with that name, so it had the
+right bytes. The manifest was still fetched, because a tag can move to
+a new image, and asking is how we’d find out.</p>
+<p>Now give it to <code>runc</code>. <code>runc</code> wants a <em>bundle</em>: a folder holding
+<code>rootfs/</code> and a <code>config.json</code> that says what to run and how to isolate
+it. <code>runc spec</code> writes a default config. <code>--rootless</code> makes one that
+works without <code>sudo</code>: you’re root inside the container, but only
+inside it.</p>
+<pre><code>$ cd /tmp/oci-demo
+$ runc spec --rootless
+$ runc run demo
+</code></pre>
+<p>You get a shell inside the container. Type the commands after <code>/ #</code>:</p>
+<pre><code>/ # cat /etc/alpine-release
+3.20.10
+/ # whoami
+root
+/ # ls /
+bin    etc    lib    mnt    proc   run    srv    tmp    var
+dev    home   media  opt    root   sbin   sys    usr
+/ # exit
+</code></pre>
+<p>That’s Alpine 3.20.10, running from files our TypeScript downloaded,
+checked and unpacked. <code>runc</code> is the same program Docker uses underneath
+to start every container. (If <code>runc run</code> complains about your system,
+try <code>sudo runc spec</code> and <code>sudo runc run demo</code> instead, without
+<code>--rootless</code>. Chapter 11 looks at what’s in <code>config.json</code>.)</p>
+<p>Now a bigger image, timed. <code>cd</code> back to your project first:</p>
+<pre><code>$ time npm start --silent -- node:22-alpine /tmp/oci-node/rootfs
+</code></pre>
+<pre><code>registry   docker.io
+repository library/node
+tag        22-alpine
+api        needs a token
+challenge  Bearer realm="https://auth.docker.io/token",service="registry.docker.io"
+platform   linux/amd64
+manifest   sha256:2c752226d477b4a886378baa95b9af252be59301b725fdb0b7e15208131505a8
+config     sha256:7c3b093add7c43400ee83b815ab2cda98794a10045bcf76ce9bb2f89b97cbc5c
+layer 1/4  sha256:e2de96513ba9eb53b431787ec8a65cdde380ac4772a3e4c4b714dcfde2a102b5  3.8 MB  downloaded
+layer 2/4  sha256:f7f2d304681aaa935c9cfd180850cf616ae843efce7682873d6521ded7268937  55.6 MB  downloaded
+layer 3/4  sha256:e554276b05e6306c5ad33cd85bfa7f0693083e21f6114db5abf60a20fb413039  1.3 MB  downloaded
+layer 4/4  sha256:d39db1cf9caa4f49c5a2e67111fbe6e0d5eea8ede550cb82f3dc2b79712688d6  0.0 MB  downloaded
+unpacked   /tmp/oci-node/rootfs
+
+real	0m13.099s
+user	0m3.756s
+sys	0m1.089s
+</code></pre>
+<p>Four layers, stacked into one folder. (Your time will depend on your
+connection, and the <code>time</code> lines look different in zsh.) And Node runs
+inside it:</p>
+<pre><code>$ cd /tmp/oci-node
+$ runc spec --rootless
+$ runc run node-demo
+</code></pre>
+<pre><code>/ # node --version
+v22.23.3
+/ # exit
+</code></pre>
+<h2 id="what-this-chapter-doesnt-do-2"><a class="header" href="#what-this-chapter-doesnt-do-2">What this chapter doesn’t do</a></h2>
+<ul>
+<li><strong>Download layers at the same time.</strong> Look at that run: 13 seconds,
+and fewer than 5 of them were the computer doing anything (<code>user</code>
+plus <code>sys</code>). The rest was waiting, mostly on layer 2 while layers 1,
+3 and 4 sat in line behind it. Chapter 8 downloads them all at once,
+with a limit, and retries a download that fails halfway.</li>
+<li><strong>Handle deleted files, or non-gzip layers.</strong> The system <code>tar</code> unpacks
+a layer’s “this file was deleted” markers as ordinary files, and
+can’t read zstd layers. Chapter 9 replaces it.</li>
+<li><strong>Resume a broken download.</strong> If the connection drops at 90%, the
+<code>.partial</code> file is deleted and the next run starts from zero.</li>
+<li><strong>Clean up the cache.</strong> <code>~/.cache/oci-pull</code> only ever grows. Delete
+it by hand whenever you like; the next pull rebuilds what it needs.</li>
+<li><strong>Read the image’s config.</strong> <code>runc</code> ran <code>sh</code> because that’s what
+<code>runc spec</code> puts in by default, not because the image asked for it.
+The config blob says what the image really wants to run. Chapter 11
+uses it.</li>
+<li><strong>Print a neat error when <code>tar</code> fails.</strong> A <code>tar</code> failure isn’t one
+of our error types, so it ends with a stack trace. Chapter 10 tidies
+all of the errors.</li>
+</ul>
+<h2 id="commit-5"><a class="header" href="#commit-5">Commit</a></h2>
+<pre><code>$ npm run check
+$ git add -A
+$ git commit -m "Download, check and unpack layers; run alpine with runc"
+</code></pre>
+<h2 id="what-you-should-now-be-able-to-answer-7"><a class="header" href="#what-you-should-now-be-able-to-answer-7">What you should now be able to answer</a></h2>
+<p>Try to answer each one in your own words first. Then open the answer
+to check.</p>
+<p><strong>1. What happens when you ask Docker Hub for a layer, and what does <code>fetch</code> do about it?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>The registry answers <code>307</code> with a <code>location</code> header: a signed, expiring
+address on a separate download server (CloudFront). <code>fetch</code> follows
+the redirect on its own, like <code>curl -L</code>, and drops the <code>authorization</code>
+header because the new server is a different one, so our token isn’t
+sent there.</p>
+</details>
+<p><strong>2. Why read a layer as a stream instead of with <code>arrayBuffer()</code>?</strong></p>
+<details>
+<summary>Answer</summary>
+<p><code>arrayBuffer()</code> holds the whole body in memory at once, and a layer
+can be hundreds of megabytes. A stream hands over a chunk at a time,
+so each chunk can be hashed, written to disk and dropped before the
+next arrives. Memory use stays small however big the layer is.</p>
+</details>
+<p><strong>3. What does <code>for await (const chunk of x)</code> do, and what kind of thing can <code>x</code> be?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>It’s a loop that waits for each item to arrive before running the body,
+like <code>async for</code> in Python. <code>x</code> must be an async iterable, something
+that hands out values one at a time when they’re ready, such as a
+<code>Response</code>’s <code>body</code> or an <code>async function*</code> generator.</p>
+</details>
+<p><strong>4. What does <code>pipeline</code> do that a hand-written loop wouldn’t?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>It connects source, middle steps and destination, and pushes each chunk
+through in order. It slows the source down when the destination (the
+disk) falls behind, so chunks don’t pile up in memory. And if any part
+fails, it stops all of them and rejects with that error.</p>
+</details>
+<p><strong>5. What is an <code>async function*</code>, and what job does ours do in <code>put</code>?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>A generator: a function that hands out many values one at a time with
+<code>yield</code>, and can <code>await</code> between them. Ours sits in the middle of the
+pipeline. For each chunk, it counts the bytes, feeds the hash, and
+passes the chunk on unchanged to the file.</p>
+</details>
+<p><strong>6. Why name files in the store after their own sha256?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Because the name then proves the content. The store refuses bytes that
+don’t match, so a file under a name is always the right bytes. That
+gives a cache for free (if it’s there, it’s correct, so skip the
+download) and sharing for free (two images with the same layer store
+it once).</p>
+</details>
+<p><strong>7. Why write to <code>.partial</code> first and <code>rename</code> at the end?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Renaming is all or nothing, so the real name never points at a
+half-written or unchecked file, even if the program crashes midway.
+<code>has()</code> only looks for the real name, so a leftover <code>.partial</code> can never
+be mistaken for a good layer. On any error, the <code>.partial</code> is deleted
+too.</p>
+</details>
+<p><strong>8. Why does <code>put</code> check the size while the bytes are arriving, and not just at the end?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>A broken or hostile server could send bytes forever. The manifest
+promised an exact size, so the first byte past it is already an error.
+Stopping there protects the disk, instead of finding out only after
+it’s full.</p>
+</details>
+<p><strong>9. Why were the store’s tests run against a real folder instead of a fake disk?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>The store’s whole job is files: <code>mkdir</code>, writing, <code>rename</code>, <code>rm</code>.
+Faking all of those would be more code than the store, and would test
+the fake, not the real behaviour. A fresh temp folder per test (from
+<code>useTempFolder</code>, with <code>beforeEach</code>/<code>afterEach</code>) is fast and honest.</p>
+</details>
+<p><strong>10. The new manifest digest check made two Chapter 6 tests fail. What was wrong, and how was it fixed?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>The test data wasn’t the real bytes: <code>ALPINE_AMD64</code> had its
+annotations trimmed and <code>bytesOf</code> wrote compact JSON, so it hashed to
+a different digest than the one the index claimed. The fix was to use
+the complete manifest and write it with <code>JSON.stringify(value, null, 2)</code>,
+the same two-space indent Docker Hub uses, so the bytes are exactly the
+real ones and hash to the real digest.</p>
+</details>
+<p><strong>11. Why can only digest requests be checked, not tag requests?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>A digest names exact bytes, so there’s something to compare against.
+A tag like <code>3.20</code> is just a label that can move to a new image at any
+time, so any manifest is a valid answer for it. That’s why
+<code>resolveImage</code> checks only when <code>DIGEST_PATTERN</code> matches the reference,
+and always for the entry picked from an index.</p>
+</details>
+<p><strong>12. Why is <code>unpackWithSystemTar</code> called a shortcut, and why does <code>execFile</code> get a list of arguments?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>It’s a shortcut because <code>tar</code> doesn’t understand layers’ “this file
+was deleted” markers (and can’t read zstd layers), so Chapter 9
+replaces it. <code>execFile</code> passes the arguments straight to the program,
+with no shell in between, so a space or <code>;</code> in a path can’t be misread
+as part of a command.</p>
+</details>
+<p><strong>13. What does <code>runc spec --rootless</code> give you, and why did <code>whoami</code> say <code>root</code>?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>A default <code>config.json</code> for a bundle, set up so the container runs
+without <code>sudo</code>. Inside the container you’re mapped to root, so
+<code>whoami</code> says <code>root</code>, but that’s only true inside it. Outside, the
+process still runs as your ordinary user.</p>
+</details>
+<h2 id="next-chapter-7"><a class="header" href="#next-chapter-7">Next chapter</a></h2>
+<p>The tool works from start to finish, but look at the timing again:
+13 seconds for <code>node:22-alpine</code>, with the computer busy for under 5 of
+them. Layers 1, 3 and 4 sat waiting in line while layer 2 downloaded.
+Chapter 8 downloads all the layers at once. “All at once” needs a limit
+(an image can have 50 layers, and a registry won’t like 50 connections
+from you), so we’ll write a small limiter ourselves. That’s our first
+<em>generic</em> function: one that works for any kind of value, which also
+lets us fold Chapter 6’s two <code>safeParse</code> branches into one. We’ll also
+retry a download that fails halfway, and test the waiting between
+retries by faking the <em>clock</em>, so a test that “waits 10 seconds” takes
+a millisecond.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="downloading-many-layers-at-once"><a class="header" href="#downloading-many-layers-at-once">Downloading Many Layers at Once</a></h1>
 <div style="break-before: page; page-break-before: always;"></div>

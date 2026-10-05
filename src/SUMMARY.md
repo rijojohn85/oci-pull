@@ -8,7 +8,7 @@
 - [The First Call to the Registry](04-the-first-call-to-the-registry.md)
 - [Getting Permission: Tokens](05-getting-permission-tokens.md)
 - [The Manifest: Trusting Nothing from the Server](06-the-manifest.md)
-- [Downloading One Layer](07-downloading-one-layer.md)
+- [The Whole Pull, Rough Version](07-the-whole-pull.md)
 - [Downloading Many Layers at Once](08-downloading-many-layers-at-once.md)
 - [Unpacking Layers into a Folder](09-unpacking-layers.md)
 - [The Command Line](10-the-command-line.md)

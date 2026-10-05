@@ -1,0 +1,16 @@
+$ curl -sS -L -H "Authorization: Bearer $TOKEN" https://registry-1.docker.io/v2/library/alpine/blobs/sha256:25f1d6b1951ac8eb3740558fe94cb83d377bdadf95fd9f98b50d2e1b96130471 -o layer.tar.gz
+$ wc -c layer.tar.gz
+3630321 layer.tar.gz
+$ sha256sum layer.tar.gz
+25f1d6b1951ac8eb3740558fe94cb83d377bdadf95fd9f98b50d2e1b96130471  layer.tar.gz
+$ tar -tzf layer.tar.gz | head
+bin/
+bin/arch
+bin/ash
+bin/base64
+bin/bbconfig
+bin/busybox
+bin/cat
+bin/chattr
+bin/chgrp
+bin/chmod

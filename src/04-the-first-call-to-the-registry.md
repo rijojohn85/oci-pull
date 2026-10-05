@@ -16,6 +16,25 @@ New in this chapter: `fetch`, Node's built-in way to make an HTTP
 request; `async`/`await` in real code; and your first *mock*, a pretend
 function that also records how it was called.
 
+## Where we are
+
+Pulling an image takes six stages. This chapter's is marked ▶:
+
+- ✓ 1. Read the image name (Ch3)
+- ▶ **2. Ask the registry, get a token** (this chapter)
+- · 3. Read the manifest, pick the platform (Ch6)
+- · 4. Download the layers, check them (Ch7; faster in Ch8)
+- · 5. Unpack them into a folder (Ch7 roughly; properly in Ch9)
+- · 6. Run it with runc (Ch7; more in Ch11)
+
+Every download in the rest of the book is an HTTP request to the registry. This chapter makes the first one, and sets up the thing that makes all later network code testable: a pretend HTTP client.
+
+By the end of this chapter you can:
+
+- Call a real registry from TypeScript with `fetch`, `async` and `await`.
+- Tell an open registry from one that wants a token.
+- Test network code without touching the network.
+
 ## What the front door says
 
 Chapter 1 showed that every registry answers on `/v2/`. Here's what

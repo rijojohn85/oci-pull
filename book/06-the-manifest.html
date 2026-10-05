@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-29d905fa.js";
+            window.path_to_searchindex_js = "searchindex-941a26d0.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-b48846b6.js"></script>
+        <script src="toc-f5958a6c.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -193,6 +193,23 @@ layers it will download in Chapter 7.</p>
 <p>New in this chapter: <code>zod</code>, <code>TextEncoder</code>/<code>TextDecoder</code>, <code>catch</code> with
 no variable, <code>find</code>/<code>map</code>/<code>filter</code> on arrays, <code>Set</code>, <code>...</code> inside an
 array, and the “I” in SOLID.</p>
+<h2 id="where-we-are"><a class="header" href="#where-we-are">Where we are</a></h2>
+<p>Pulling an image takes six stages. This chapter’s is marked ▶:</p>
+<ul>
+<li>✓ 1. Read the image name (Ch3)</li>
+<li>✓ 2. Ask the registry, get a token (Ch4–5)</li>
+<li>▶ <strong>3. Read the manifest, pick the platform</strong> (this chapter)</li>
+<li>· 4. Download the layers, check them (Ch7; faster in Ch8)</li>
+<li>· 5. Unpack them into a folder (Ch7 roughly; properly in Ch9)</li>
+<li>· 6. Run it with runc (Ch7; more in Ch11)</li>
+</ul>
+<p>The manifest is the list of layers to download, so the next three stages depend on reading it correctly. It comes from a server we don’t control, so nothing in it can be trusted until it’s checked.</p>
+<p>By the end of this chapter you can:</p>
+<ul>
+<li>Check any JSON from a server against a shape, and get a clear error naming the bad field.</li>
+<li>Go from a tag to the exact image manifest for your CPU.</li>
+<li>Print the layers the tool will download.</li>
+</ul>
 <h2 id="two-kinds-of-manifest-by-hand"><a class="header" href="#two-kinds-of-manifest-by-hand">Two kinds of manifest, by hand</a></h2>
 <p>Microsoft’s registry needs no token, so plain <code>curl</code> is enough. Ask for
 the <code>azurelinux/base/core:3.0</code> image, and say we can read Docker’s
@@ -1486,15 +1503,16 @@ digest. If the second answer is another index, we refuse it.</p>
 </details>
 <h2 id="next-chapter"><a class="header" href="#next-chapter">Next chapter</a></h2>
 <p>We know exactly which layers to fetch, with their digest and size, but
-haven’t downloaded a byte of them. Chapter 7 downloads one layer. A
-layer can be hundreds of megabytes, so we can’t hold it in memory the
-way we held the manifest. It has to flow through: read a little, write
-a little. That’s a <em>stream</em>. While the bytes go by, we compute their
-<code>sha256</code> and refuse the file if it doesn’t match the digest. The same
-check closes this chapter’s first gap, for manifests. The files land
-in a small <em>content store</em>: a folder where every file is named after
-its own checksum, so a layer that’s already there never downloads
-twice.</p>
+haven’t downloaded a byte of them, and <code>./rootfs</code> is still empty.
+Chapter 7 closes that gap all the way: by its end, the tool pulls a
+whole image and you run Alpine with <code>runc</code>. A layer can be hundreds of
+megabytes, so we can’t hold it in memory the way we held the manifest.
+It has to flow through: read a little, write a little. That’s a
+<em>stream</em>. While the bytes go by, we compute their <code>sha256</code> and refuse
+the file if it doesn’t match the digest. The same check closes this
+chapter’s first gap, for manifests. Two parts will be rough on purpose
+(one layer at a time, and the system’s <code>tar</code> command to unpack), and
+Chapters 8 and 9 replace them.</p>
 
                     </main>
 
@@ -1504,7 +1522,7 @@ twice.</p>
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="07-downloading-one-layer.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="07-the-whole-pull.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -1518,7 +1536,7 @@ twice.</p>
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="07-downloading-one-layer.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="07-the-whole-pull.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>

@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-29d905fa.js";
+            window.path_to_searchindex_js = "searchindex-941a26d0.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-b48846b6.js"></script>
+        <script src="toc-f5958a6c.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -223,6 +223,19 @@ $ sudo runc run --bundle . demo
 / # cat /etc/alpine-release
 3.20.3
 </code></pre>
+<h2 id="the-stages"><a class="header" href="#the-stages">The stages</a></h2>
+<p>Pulling an image takes six stages. Every chapter opens with this list,
+marked to show where it fits:</p>
+<ol>
+<li>Read the image name (Chapter 3)</li>
+<li>Ask the registry, get a token (Chapters 4–5)</li>
+<li>Read the manifest, pick the platform (Chapter 6)</li>
+<li>Download the layers, check them (Chapter 7; faster in Chapter 8)</li>
+<li>Unpack them into a folder (Chapter 7 roughly; properly in Chapter 9)</li>
+<li>Run it with runc (Chapter 7; more in Chapter 11)</li>
+</ol>
+<p>Chapter 7 is where it all first works end to end, with two honest
+shortcuts. Each later chapter replaces one shortcut with the real thing.</p>
 <h2 id="table-of-contents"><a class="header" href="#table-of-contents">Table of contents</a></h2>
 <ol>
 <li><strong>Why Build an Image Puller</strong> — what actually happens during
@@ -253,24 +266,29 @@ JSON; TypeScript has no idea what’s in it and neither should you.
 <code>zod</code> turns “some JSON” into “a value with a known shape, or a clear
 error.” One server reply can be one of two shapes (a manifest, or a
 list of manifests for different CPUs); picking the right one.</li>
-<li><strong>Downloading One Layer</strong> — streams (read a little, write a little,
-never hold 200 MB in memory), computing the checksum <em>while</em> the bytes
-go by, refusing anything whose checksum doesn’t match. A content
-store: files named after their own checksum. <em>One class, one job.</em></li>
-<li><strong>Downloading Many Layers at Once</strong> — <code>Promise.all</code>, why “all at
-once” needs a limit, writing a small limiter ourselves (first generic
-function, explained plainly), cancelling with <code>AbortController</code>, retry
-with backoff, and faking the <em>clock</em> so retry tests take milliseconds</li>
-<li><strong>Unpacking Layers into a Folder</strong> — layers apply in order, later
-ones win, a file named <code>.wh.foo</code> means “delete <code>foo</code>”; the <code>tar</code>
-package; tests against a real temporary folder, not a fake</li>
+<li><strong>The Whole Pull, Rough Version</strong> — the first time the tool pulls an
+image end to end and you run it with <code>runc</code>. Streams (read a little,
+write a little, never hold 200 MB in memory), computing the checksum
+<em>while</em> the bytes go by, refusing anything whose checksum doesn’t
+match. A content store: files named after their own checksum. <em>One
+class, one job.</em> Two honest shortcuts, each replaced later: layers
+download one at a time, and the system’s <code>tar</code> command unpacks them.</li>
+<li><strong>Downloading Many Layers at Once</strong> — replaces the one-at-a-time loop.
+<code>Promise.all</code>, why “all at once” needs a limit, writing a small limiter
+ourselves (first generic function, explained plainly), cancelling with
+<code>AbortController</code>, retry with backoff, and faking the <em>clock</em> so retry
+tests take milliseconds</li>
+<li><strong>Unpacking Layers into a Folder</strong> — replaces the system <code>tar</code> shortcut.
+Layers apply in order, later ones win, a file named <code>.wh.foo</code> means
+“delete <code>foo</code>” (which the system <code>tar</code> got wrong); the <code>tar</code> package;
+tests against a real temporary folder, not a fake</li>
 <li><strong>The Command Line</strong> — arguments, progress output, exit codes, the
 one file where every piece is finally wired together (and why it’s
 the only file allowed to know about all of them), <code>npm link</code> so
 <code>oci-pull</code> works from anywhere</li>
-<li><strong>Running It for Real with runc</strong> — pull <code>alpine</code>, <code>runc spec</code>, point
-it at our folder, <code>runc run</code>, real captured output. Then a bigger
-image with several layers and a deleted file, to prove Chapter 9</li>
+<li><strong>Running It for Real with runc</strong> — Chapter 7 ran <code>alpine</code> roughly;
+now a bigger image with several layers and a deleted file, to prove
+Chapters 8 and 9, and what <code>runc spec</code>’s config actually controls</li>
 <li><strong>Getting to Production</strong> — turning <code>.ts</code> into shippable <code>.js</code>, what
 <code>package.json</code> needs so others can install it, structured errors
 with exit codes, a lint step, and the honest list of what this tool

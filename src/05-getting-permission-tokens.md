@@ -18,6 +18,25 @@ New in this chapter: `Record`, optional parameters, `URL`, `unknown`,
 `Map`, named regex groups, `...` for copying and gathering, and
 `mockResolvedValueOnce`.
 
+## Where we are
+
+Pulling an image takes six stages. This chapter's is marked ▶:
+
+- ✓ 1. Read the image name (Ch3)
+- ▶ **2. Ask the registry, get a token** (this chapter)
+- · 3. Read the manifest, pick the platform (Ch6)
+- · 4. Download the layers, check them (Ch7; faster in Ch8)
+- · 5. Unpack them into a folder (Ch7 roughly; properly in Ch9)
+- · 6. Run it with runc (Ch7; more in Ch11)
+
+Docker Hub and GitHub won't hand out anything without a token, not even a public image. This chapter gets one, and uses it to fetch the manifest: the file that says which layers to download.
+
+By the end of this chapter you can:
+
+- Get a token the way `docker pull` does, from any of the big registries.
+- Fetch an image's manifest as raw bytes.
+- Fake a whole conversation of several requests in one test.
+
 ## The whole dance, by hand
 
 Before writing code, do it with curl so you know exactly what the code

@@ -1,0 +1,48 @@
+$ npm test
+# state: Step 5: + digest.ts, resolve.ts digest check; Ch6 fixtures and resolve tests
+
+ RUN  v5.0.1 /tmp/claude-1000/-home-rijojohn-csi-driver/03863128-cbfb-4b66-806f-4e858c79bedd/scratchpad/ch7state/oci-pull
+
+ ❯ src/resolve.test.ts (3 tests | 2 failed) 49ms
+   ❯ resolveImage (3)
+     × follows an index to the entry for our platform 15ms
+     × refuses an index that points to another index 16ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/resolve.test.ts > resolveImage > follows an index to the entry for our platform
+ManifestError: manifest: asked for sha256:c64c687cbea9300178b30c95835354e34c4e4febc4badfe27102879de0483b5e, got bytes for sha256:7ff2162921815d7cc8cd13d13b4fdc7b4ce3e05c63ae8dc788dbc87c01d98f1c
+ ❯ checkDigest src/resolve.ts:54:11
+     52|   const actual = sha256Digest(raw.bytes)
+     53|   if (actual !== digest) {
+     54|     throw new ManifestError(`asked for ${digest}, got bytes for ${actu…
+       |           ^
+     55|   }
+     56| }
+ ❯ resolveImage src/resolve.ts:41:3
+ ❯ src/resolve.test.ts:37:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/resolve.test.ts > resolveImage > refuses an index that points to another index
+AssertionError: expected [Function] to throw error including 'is another index, not an image' but got 'manifest: asked for sha256:c64c687cbe…'
+
+Expected: "is another index, not an image"
+Received: "manifest: asked for sha256:c64c687cbea9300178b30c95835354e34c4e4febc4badfe27102879de0483b5e, got bytes for sha256:c2a3b3a938ff2c7de4a0cee77973a95ac91f2bb5e52f82d5602927e716adceef"
+
+ ❯ src/resolve.test.ts:51:83
+     49|
+     50|     // An async failure: await the expect, or the test ends too early.
+     51|     await expect(resolveImage({ fetchManifest }, "library/alpine", "3.…
+       |                                                                                   ^
+     52|       "is another index, not an image",
+     53|     )
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 7 passed (8)
+      Tests  2 failed | 59 passed (61)
+   Start at  18:04:51
+   Duration  617ms (import 46%, transform 30%, tests 21%, worker 2%)
+

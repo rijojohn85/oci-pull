@@ -1,0 +1,23 @@
+$ npm run check
+# state: end Step 3: + store.ts, store.test.ts, temp-folder.ts, test-blobs.ts
+
+> oci-pull@1.0.0 check
+> npm run typecheck && npm run test
+
+
+> oci-pull@1.0.0 typecheck
+> tsc --noEmit
+
+
+> oci-pull@1.0.0 test
+> vitest run
+
+
+ RUN  v5.0.1 /tmp/claude-1000/-home-rijojohn-csi-driver/03863128-cbfb-4b66-806f-4e858c79bedd/scratchpad/ch7state/oci-pull
+
+
+ Test Files  7 passed (7)
+      Tests  59 passed (59)
+   Start at  18:04:41
+   Duration  449ms (import 41%, transform 39%, tests 15%, worker 5%)
+

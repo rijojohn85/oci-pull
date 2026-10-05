@@ -37,6 +37,22 @@
   syntax and intent of non-obvious lines, so the reader never has to
   flip back to the prose to read the code.
 
+## Keeping the "why" visible (user's choice, 2026-10-05)
+The book is built bottom-up, so every chapter must show where it fits:
+- **"Where we are" map** right after the opening paragraph: the six stages
+  of a pull, each marked ✓ done, ▶ this chapter, or · later (with the
+  chapter that does it). Same list in every chapter.
+- **Open on the gap, shown for real**: run the program as the last
+  chapter left it and show (real output) what's missing or broken.
+- **"Why this chapter"**: one short paragraph on how this chapter gets us
+  closer to running the image, then "By the end of this chapter you can:"
+  with 2-4 bullets.
+- **End on the next gap**: the last "Try it" or the "Next chapter"
+  paragraph shows (real output where possible) what still doesn't work.
+- **Walking skeleton**: from Ch7 on, the tool pulls and runs a whole image
+  end to end, roughly. Later chapters replace a rough part with a good one
+  and say which shortcut they remove.
+
 ## Process
 - One chapter at a time. Write it, stop, user tries it, then next.
 - Check real interfaces before drafting (registry API, Node docs, zod,

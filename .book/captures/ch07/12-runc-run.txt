@@ -1,0 +1,12 @@
+$ cd /tmp/oci-demo
+$ runc spec --rootless
+$ runc run demo
+# state: rootfs from 10-run-alpine-first; typed: cat /etc/alpine-release, whoami, ls /, exit (script -qec, input echo lines removed; CRs and ls colours stripped)
+/ # cat /etc/alpine-release
+3.20.10
+/ # whoami
+root
+/ # ls /
+bin    etc    lib    mnt    proc   run    srv    tmp    var
+dev    home   media  opt    root   sbin   sys    usr
+/ # exit

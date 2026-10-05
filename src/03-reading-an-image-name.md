@@ -12,6 +12,25 @@ value every later chapter starts from: a `Reference`.
 Everything in this chapter goes into your project. Run `npm run check`
 at the end; it should be green.
 
+## Where we are
+
+Pulling an image takes six stages. This chapter's is marked ▶:
+
+- ▶ **1. Read the image name** (this chapter)
+- · 2. Ask the registry, get a token (Ch4–5)
+- · 3. Read the manifest, pick the platform (Ch6)
+- · 4. Download the layers, check them (Ch7; faster in Ch8)
+- · 5. Unpack them into a folder (Ch7 roughly; properly in Ch9)
+- · 6. Run it with runc (Ch7; more in Ch11)
+
+Every later stage starts from the name: the registry to call, the repository to ask about, the tag or digest to fetch. Get it wrong here, and every request after it goes to the wrong place.
+
+By the end of this chapter you can:
+
+- Turn anything a user types (`alpine`, `ghcr.io/x/y:1.0`, `alpine@sha256:...`) into its full, exact form.
+- Refuse a bad name with a clear message, before any network call.
+- Write and run your first real tests in TypeScript.
+
 ## The rules, from the source
 
 The rules aren't invented — they're in the `distribution/reference`

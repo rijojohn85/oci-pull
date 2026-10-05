@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-29d905fa.js";
+            window.path_to_searchindex_js = "searchindex-941a26d0.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-b48846b6.js"></script>
+        <script src="toc-f5958a6c.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -190,6 +190,23 @@ time it’s called. By the end, one test plays the whole conversation,
 <p>New in this chapter: <code>Record</code>, optional parameters, <code>URL</code>, <code>unknown</code>,
 <code>Map</code>, named regex groups, <code>...</code> for copying and gathering, and
 <code>mockResolvedValueOnce</code>.</p>
+<h2 id="where-we-are"><a class="header" href="#where-we-are">Where we are</a></h2>
+<p>Pulling an image takes six stages. This chapter’s is marked ▶:</p>
+<ul>
+<li>✓ 1. Read the image name (Ch3)</li>
+<li>▶ <strong>2. Ask the registry, get a token</strong> (this chapter)</li>
+<li>· 3. Read the manifest, pick the platform (Ch6)</li>
+<li>· 4. Download the layers, check them (Ch7; faster in Ch8)</li>
+<li>· 5. Unpack them into a folder (Ch7 roughly; properly in Ch9)</li>
+<li>· 6. Run it with runc (Ch7; more in Ch11)</li>
+</ul>
+<p>Docker Hub and GitHub won’t hand out anything without a token, not even a public image. This chapter gets one, and uses it to fetch the manifest: the file that says which layers to download.</p>
+<p>By the end of this chapter you can:</p>
+<ul>
+<li>Get a token the way <code>docker pull</code> does, from any of the big registries.</li>
+<li>Fetch an image’s manifest as raw bytes.</li>
+<li>Fake a whole conversation of several requests in one test.</li>
+</ul>
 <h2 id="the-whole-dance-by-hand"><a class="header" href="#the-whole-dance-by-hand">The whole dance, by hand</a></h2>
 <p>Before writing code, do it with curl so you know exactly what the code
 has to do. It takes three requests.</p>

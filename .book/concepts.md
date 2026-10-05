@@ -11,7 +11,7 @@
 | `===` | Ch2.5 §3 | throughout |
 | Union / tagged one-of type + `switch` with no default | Ch3 (`Reference`, `target`) | Ch4 `ApiCheck`, `describeApiCheck`, Ch6 `Manifest` |
 | `interface`, `extends`, `readonly` | Ch3 | Ch5 `Challenge`, `RawManifest` |
-| Own error class (`extends Error`, `name`) | Ch3 `InvalidReferenceError` | Ch4 `RegistryError`, Ch5 `AuthError`, Ch6 `ManifestError` |
+| Own error class (`extends Error`, `name`) | Ch3 `InvalidReferenceError` | Ch4 `RegistryError`, Ch5 `AuthError`, Ch6 `ManifestError`, Ch7 `StoreError` (shown in full with the class) |
 | Named constants instead of magic values | Ch3 (`DEFAULT_TAG` ...) | Ch4 `DOCKER_HUB_API_HOST`, Ch5 `MANIFEST_TYPES` |
 | Vitest `describe`/`it`/`expect`, `toEqual`, `toThrow` | Ch2/Ch3 | every chapter |
 | `it.each` with a table of rows | Ch3 | Ch4 registries, Ch5 parseChallenge |
@@ -53,7 +53,24 @@
 | Arrow functions + `find` / `map` / `filter` (filter narrows undefined away) | Ch6 Step 6 | Ch6 `layers.map((layer, i) => ...)` |
 | `Set` | Ch6 Step 6 | — |
 | Default parameter used to inject the environment (`arch = process.arch`) | Ch6 Step 6 `hostPlatform` | — |
-| Interface segregation (I in SOLID): narrow `ManifestSource` | Ch6 Step 7 | — |
+| Interface segregation (I in SOLID): narrow `ManifestSource` | Ch6 Step 7 | Ch7 `BlobSource` (Your turn) |
 | `toHaveLength` | Ch6 Step 7 | — |
 | Destructuring an object `const { a, b } = obj` | Ch6 Step 8 (comment) | — |
 | Numeric separator `1_000_000`, `toFixed` | Ch6 Step 8 | — |
+| Where-we-are map / walking skeleton (book structure) | Ch7 (retrofitted Ch3-6) | every chapter |
+| Streams; `AsyncIterable<Uint8Array>`; `for await` | Ch7 Step 1 | — |
+| `response.body`; fetch follows redirects and drops auth cross-origin | Ch7 Step 1 | — |
+| `TextDecoder` `{ stream: true }` | Ch7 Step 1 `textOf` | — |
+| `node:` modules: `crypto` createHash (incremental update/digest), `fs` createWriteStream, `fs/promises` access/mkdir/rename/rm/readdir/readFile/mkdtemp, `path` join, `os` tmpdir/homedir | Ch7 Step 2 | — |
+| `pipeline` (stream/promises) + `async function*` generator step, `yield`, `AsyncGenerator<T>` | Ch7 Step 2 | Ch7 `chunksOf` |
+| Closure (inner function changes outer variables) | Ch7 Step 2 (named) | — |
+| `.partial` + `rename` (all-or-nothing), cleanup in `catch` then rethrow | Ch7 Step 2 | — |
+| Single responsibility (S in SOLID) named: `ContentStore` | Ch7 Step 2 | — |
+| `beforeEach`/`afterEach`, real temp folder (`useTempFolder` returns a getter) | Ch7 Step 2 | — |
+| Failure shown on purpose (remove cleanup line) | Ch7 Step 2 | — |
+| String-literal one-of type (`"downloaded" \| "cached"`) | Ch7 Step 3 (Your turn, explained) | — |
+| `FakeX { x, method: Mock<...> }` fake shape | Ch5 `FakeHttp` | Ch7 `FakeSource` |
+| Fixture must be real bytes: `JSON.stringify(v, null, 2)` reproduces Docker Hub's | Ch7 Step 4 | — |
+| `execFile` + `promisify` (callback → Promise) | Ch7 Step 5 | — |
+| `array.entries()` + `[i, x]` destructuring in `for...of` | Ch7 Step 6 | — |
+| `runc spec --rootless`, `runc run` | Ch7 Try it | Ch11 |

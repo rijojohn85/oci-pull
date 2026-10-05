@@ -22,6 +22,25 @@ New in this chapter: `zod`, `TextEncoder`/`TextDecoder`, `catch` with
 no variable, `find`/`map`/`filter` on arrays, `Set`, `...` inside an
 array, and the "I" in SOLID.
 
+## Where we are
+
+Pulling an image takes six stages. This chapter's is marked ▶:
+
+- ✓ 1. Read the image name (Ch3)
+- ✓ 2. Ask the registry, get a token (Ch4–5)
+- ▶ **3. Read the manifest, pick the platform** (this chapter)
+- · 4. Download the layers, check them (Ch7; faster in Ch8)
+- · 5. Unpack them into a folder (Ch7 roughly; properly in Ch9)
+- · 6. Run it with runc (Ch7; more in Ch11)
+
+The manifest is the list of layers to download, so the next three stages depend on reading it correctly. It comes from a server we don't control, so nothing in it can be trusted until it's checked.
+
+By the end of this chapter you can:
+
+- Check any JSON from a server against a shape, and get a clear error naming the bad field.
+- Go from a tag to the exact image manifest for your CPU.
+- Print the layers the tool will download.
+
 ## Two kinds of manifest, by hand
 
 Microsoft's registry needs no token, so plain `curl` is enough. Ask for
@@ -1609,12 +1628,13 @@ digest. If the second answer is another index, we refuse it.
 ## Next chapter
 
 We know exactly which layers to fetch, with their digest and size, but
-haven't downloaded a byte of them. Chapter 7 downloads one layer. A
-layer can be hundreds of megabytes, so we can't hold it in memory the
-way we held the manifest. It has to flow through: read a little, write
-a little. That's a *stream*. While the bytes go by, we compute their
-`sha256` and refuse the file if it doesn't match the digest. The same
-check closes this chapter's first gap, for manifests. The files land
-in a small *content store*: a folder where every file is named after
-its own checksum, so a layer that's already there never downloads
-twice.
+haven't downloaded a byte of them, and `./rootfs` is still empty.
+Chapter 7 closes that gap all the way: by its end, the tool pulls a
+whole image and you run Alpine with `runc`. A layer can be hundreds of
+megabytes, so we can't hold it in memory the way we held the manifest.
+It has to flow through: read a little, write a little. That's a
+*stream*. While the bytes go by, we compute their `sha256` and refuse
+the file if it doesn't match the digest. The same check closes this
+chapter's first gap, for manifests. Two parts will be rough on purpose
+(one layer at a time, and the system's `tar` command to unpack), and
+Chapters 8 and 9 replace them.

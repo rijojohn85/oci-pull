@@ -1,0 +1,7 @@
+$ cd /tmp/oci-node
+$ runc spec --rootless
+$ runc run node-demo
+# state: rootfs from 13; typed: node --version, exit (script; echo lines removed, CRs stripped)
+/ # node --version
+v22.23.3
+/ # exit
