@@ -483,14 +483,70 @@ oci-pull/
 
 ## What you should now be able to answer
 
-- Which of Node, `tsc`, and Vitest checks types? Which ones run code?
-- Why does `npm run check` have to run two commands?
-- What does `"type": "module"` in `package.json` change?
-- Why do imports in this project end in `.ts`, and what setting allows
-  that?
-- Why is `cli.ts` a separate file from `main.ts`?
-- Why does `main` return a number instead of calling `process.exit`?
-- What does `--save-dev` mean, and why pin `@types/node` to `22`?
+Try to answer each one in your own words first. Then open the answer to check.
+
+**1. Which of Node, `tsc`, and Vitest checks types? Which ones run code?**
+
+<details>
+<summary>Answer</summary>
+
+Only `tsc` checks types. Node and Vitest *run* code, and they do it by deleting the type labels first. They never check them. (`tsc` can also build `.js` files, which Chapter 12 uses.)
+
+</details>
+
+**2. Why does `npm run check` have to run two commands?**
+
+<details>
+<summary>Answer</summary>
+
+Because neither one is enough alone. The tests (Vitest) prove the code *does* the right thing but ignore types: the `oops.test.ts` with a wrong type still passed. The type check (`tsc`) proves the types are true but runs nothing. `check` runs both.
+
+</details>
+
+**3. What does `"type": "module"` in `package.json` change?**
+
+<details>
+<summary>Answer</summary>
+
+It tells Node to treat every file in the project as a modern module, using `import`/`export` instead of the older `require()`. (It's also what allows `await` at the top level of a file, used in Chapter 4.)
+
+</details>
+
+**4. Why do imports in this project end in `.ts`, and what setting allows that?**
+
+<details>
+<summary>Answer</summary>
+
+Node runs the `.ts` files directly, with no build step, so an import must name the real file, `./main.ts`. The `rewriteRelativeImportExtensions` setting allows writing `.ts` there. When Chapter 12 builds real `.js`, it rewrites the imports to `./main.js`.
+
+</details>
+
+**5. Why is `cli.ts` a separate file from `main.ts`?**
+
+<details>
+<summary>Answer</summary>
+
+Importing a file must never *run the program*. Tests import `main.ts`. If it called `main(...)` itself, every test would start a pull. So `main.ts` only defines things, and `cli.ts` is the one file that kicks the program off. One file, one job (single responsibility).
+
+</details>
+
+**6. Why does `main` return a number instead of calling `process.exit`?**
+
+<details>
+<summary>Answer</summary>
+
+A function that returns a value is easy to test: call it and check the number. A function that ends the process would end the test run too. `cli.ts` puts the returned number into `process.exitCode`, and Node exits with it after finishing normally.
+
+</details>
+
+**7. What does `--save-dev` mean, and why pin `@types/node` to `22`?**
+
+<details>
+<summary>Answer</summary>
+
+`--save-dev` marks a package as needed to *develop* the project (compiler, test runner, type definitions), not to run it. It goes under `devDependencies`. `@types/node@22` describes Node's built-in functions. Pinning it to the same major version as the Node you run means the types describe the functions you actually have.
+
+</details>
 
 ## Next chapter
 

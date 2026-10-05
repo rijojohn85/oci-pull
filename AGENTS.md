@@ -20,6 +20,10 @@
 - Real captured output only. Never hand-typed terminal output.
 - Every chapter ends with: `npm run check` green, one git commit, "what
   you should now be able to answer", one-paragraph preview of next.
+- "What you should now be able to answer": numbered bold questions, each
+  followed by its answer in a `<details><summary>Answer</summary>` block
+  (blank lines inside so the markdown renders). Answers in plain words,
+  2-5 sentences, matching what the chapter actually taught.
 - Terminal blocks: commands start with `$ `. Output has no prefix. When
   in doubt, split into two blocks with "you should see:" between.
 - Later chapters show edits, not full reprints; say which file and where.

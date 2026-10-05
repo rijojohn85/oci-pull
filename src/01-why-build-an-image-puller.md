@@ -436,15 +436,78 @@ not a made-up one:
 
 ## What you should now be able to answer
 
-- What are the four HTTP exchanges behind `docker pull`?
-- What is a registry, a manifest, an index, a blob, a layer, a digest?
-- What is an HTTP header, and which two headers tell you what kind of
-  file the registry sent and whether it arrived intact?
-- Why does a public image still need a token, and how does the client
-  find out where to get one?
-- Why can an image name fetch *two different shapes* of JSON?
-- How does a digest protect you from a corrupted download?
-- How do layers turn into one folder, and what does `.wh.foo` mean?
+Try to answer each one in your own words first. Then open the answer to check.
+
+**1. What are the four HTTP exchanges behind `docker pull`?**
+
+<details>
+<summary>Answer</summary>
+
+1. **Knock on `/v2/`.** The registry answers `401` and a `www-authenticate` header saying where to get a token.
+2. **Get a token** from that address (the `realm`), sending back the `service` and a `scope` naming the image.
+3. **Ask for the manifest**, with the token in `Authorization` and the formats you understand in `Accept`. For a multi-CPU image this first gives you an index. You then ask again, by digest, for your CPU's manifest.
+4. **Download the blobs**, the config and every layer, by their digests, and check each one's size and fingerprint.
+
+</details>
+
+**2. What is a registry, a manifest, an index, a blob, a layer, a digest?**
+
+<details>
+<summary>Answer</summary>
+
+- **Registry**: a server that stores and hands out images (Docker Hub, `ghcr.io`, ...).
+- **Manifest**: a small JSON parts list for *one* image on *one* kind of computer: a config and the layers, in order.
+- **Index**: a JSON list of manifests, one per kind of computer. It names no layers itself; it only points.
+- **Blob**: any file the registry stores, asked for by its digest.
+- **Layer**: a blob that is a compressed `tar` of part of the filesystem.
+- **Digest**: a fingerprint of a file's bytes (`sha256:...`). Change one byte and it changes completely.
+
+</details>
+
+**3. What is an HTTP header, and which two headers tell you what kind of file the registry sent and whether it arrived intact?**
+
+<details>
+<summary>Answer</summary>
+
+A header is a short `name: value` label sent along with a request or a reply, describing it. It's the sticker on the parcel, not the goods inside. `content-type` says what kind of file the body is (index or manifest). `docker-content-digest` is the body's fingerprint. Compute `sha256` of what you received and compare.
+
+</details>
+
+**4. Why does a public image still need a token, and how does the client find out where to get one?**
+
+<details>
+<summary>Answer</summary>
+
+Docker Hub wants every request to carry a token, a short-lived pass (five minutes) that says "this client may read this image". For public images it hands one to anyone who asks, without a password. The client learns where to ask from the `401` reply's `www-authenticate` header: `realm` is the token server's address, and `service` is a value to send back.
+
+</details>
+
+**5. Why can an image name fetch *two different shapes* of JSON?**
+
+<details>
+<summary>Answer</summary>
+
+Because a tag can point at an **index** (the image is built for several kinds of CPU) or straight at a **manifest** (it's built for only one). The `content-type` header tells you which one arrived. Inside, a manifest has `layers` and an index has `manifests`.
+
+</details>
+
+**6. How does a digest protect you from a corrupted download?**
+
+<details>
+<summary>Answer</summary>
+
+Blobs are *named* by their digest. After downloading, you compute the fingerprint of the bytes you actually got and compare it with the name you asked for. If even one byte changed on the way, the fingerprints won't match, and you throw the file away.
+
+</details>
+
+**7. How do layers turn into one folder, and what does `.wh.foo` mean?**
+
+<details>
+<summary>Answer</summary>
+
+Unpack layer 1 into an empty folder, then layer 2 on top, and so on, in order. When a file exists in two layers, the later one wins. A file named `.wh.foo` in a layer means "delete `foo` from the layers below". The special name `.wh..wh..opq` means "empty this folder of everything from below".
+
+</details>
 
 ## Next chapter
 

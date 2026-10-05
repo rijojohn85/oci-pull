@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-97d040ea.js";
+            window.path_to_searchindex_js = "searchindex-c5e56785.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-b48846b6.js"></script>
@@ -844,24 +844,62 @@ $ git add -A
 $ git commit -m "Parse image references"
 </code></pre>
 <h2 id="what-you-should-now-be-able-to-answer"><a class="header" href="#what-you-should-now-be-able-to-answer">What you should now be able to answer</a></h2>
-<ul>
-<li>What are the four parts of an image name, and which are optional?</li>
-<li>What three defaults does a bare <code>alpine</code> pick up?</li>
-<li>How do you tell a registry from the first part of a repository?</li>
-<li>Why is <code>Reference</code> a union of two interfaces instead of one interface
-with two optional fields?</li>
-<li>What does the <code>kind</code> field do, and what happens if you forget a
-<code>case</code>?</li>
-<li>Why does <code>localhost:5000/dev/app</code> have no tag?</li>
-<li>Why do <code>extractDigest</code> and <code>extractTag</code> both return the leftover
-string, and what broke when one of them didn’t?</li>
-<li>Why does <code>parseReference</code> need no <code>let</code> at all?</li>
-<li>Why does <code>parseReference</code> throw its own error class instead of a
-plain <code>Error</code>?</li>
-<li>Why is <code>expect(() =&gt; parseReference("")).toThrow(...)</code> wrapped
-in a function?</li>
-<li>Why did <code>argv.length !== 2</code> have to become a check on the values?</li>
-</ul>
+<p>Try to answer each one in your own words first. Then open the answer to check.</p>
+<p><strong>1. What are the four parts of an image name, and which are optional?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Registry, repository, tag, and digest (after <code>@</code>). Only the repository is required. The rest have defaults or can be left out.</p>
+</details>
+<p><strong>2. What three defaults does a bare <code>alpine</code> pick up?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Registry <code>docker.io</code>, the <code>library/</code> prefix (because it’s Docker Hub and the name has no <code>/</code>), and tag <code>latest</code>. So it becomes <code>docker.io/library/alpine:latest</code>.</p>
+</details>
+<p><strong>3. How do you tell a registry from the first part of a repository?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Look at the part before the first <code>/</code>. It’s a registry only if it is exactly <code>localhost</code>, or it contains a <code>.</code> (a hostname) or a <code>:</code> (a port). Otherwise it’s part of the repository, as in <code>rijojohn85/oci-pull</code>.</p>
+</details>
+<p><strong>4. Why is <code>Reference</code> a union of two interfaces instead of one interface with two optional fields?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>One interface with <code>tag?</code> and <code>digest?</code> would allow both to be missing, or both to be set. Every user of a <code>Reference</code> would then have to check for those nonsense cases. The union allows exactly one: tagged <em>or</em> digested. The impossible states can’t even be written.</p>
+</details>
+<p><strong>5. What does the <code>kind</code> field do, and what happens if you forget a <code>case</code>?</strong></p>
+<details>
+<summary>Answer</summary>
+<p><code>kind</code> is the field that says which shape you hold (<code>"tag"</code> or <code>"digest"</code>). A <code>switch</code> on it narrows the type, so each <code>case</code> can use that shape’s own field. Forget a <code>case</code> and the function fails to compile (“Function lacks ending return statement…”). The compiler finds the shape you forgot.</p>
+</details>
+<p><strong>6. Why does <code>localhost:5000/dev/app</code> have no tag?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>A <code>:</code> only starts a tag if it comes <em>after</em> the last <code>/</code>. Here the only colon comes before it, so it’s the port of the registry <code>localhost:5000</code>. With no tag given, the reference gets the default, <code>latest</code>.</p>
+</details>
+<p><strong>7. Why do <code>extractDigest</code> and <code>extractTag</code> both return the leftover string, and what broke when one of them didn’t?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Each step cuts a piece off the end, and the next step must work on what’s left. A function can’t change the caller’s string, so it has to hand the shorter string back. The first draft of <code>extractDigest</code> returned only the digest. <code>extractTag</code> then still saw <code>alpine@sha256:...</code>, took the hex after the last <code>:</code> as a tag, and left <code>alpine@sha256</code> as the repository. Every test with an <code>@</code> failed with “not a valid repository name”.</p>
+</details>
+<p><strong>8. Why does <code>parseReference</code> need no <code>let</code> at all?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Each step’s result gets its own <code>const</code> name (<code>restAfterDigest</code>, <code>restAfterTag</code>) instead of reusing one variable. Nothing is ever reassigned, so every name means one thing on every line.</p>
+</details>
+<p><strong>9. Why does <code>parseReference</code> throw its own error class instead of a plain <code>Error</code>?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>So callers can tell “the user typed a bad name” apart from every other failure with a single <code>instanceof</code> check. <code>main</code> prints the message and exits <code>1</code> for this one, and re-throws anything else. The class also keeps the bad <code>input</code> as a field, so nobody has to dig it out of the message.</p>
+</details>
+<p><strong>10. Why is <code>expect(() =&gt; parseReference("")).toThrow(...)</code> wrapped in a function?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Without the wrapper, <code>parseReference("")</code> would run, and throw, while the argument to <code>expect</code> is being worked out, before <code>expect</code> ever gets control. The test would crash instead of passing. Handing <code>expect</code> a function lets it call that function itself and catch the throw.</p>
+</details>
+<p><strong>11. Why did <code>argv.length !== 2</code> have to become a check on the values?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Because of <code>noUncheckedIndexedAccess</code>, <code>image</code> and <code>outputDir</code> are typed <code>string | undefined</code>, and checking the array’s length doesn’t change that for the compiler. Checking <code>image === undefined || outputDir === undefined</code> does: after that <code>if</code>, both are plain strings (narrowing).</p>
+</details>
 <h2 id="next-chapter"><a class="header" href="#next-chapter">Next chapter</a></h2>
 <p>Chapter 4 makes the first real HTTP call — to <code>/v2/</code>, the front door
 from Chapter 1, which answers <code>401</code> and tells us where to get a token.

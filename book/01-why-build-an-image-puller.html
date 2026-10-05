@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-97d040ea.js";
+            window.path_to_searchindex_js = "searchindex-c5e56785.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-b48846b6.js"></script>
@@ -509,17 +509,54 @@ the clock, which is the testing skill that transfers to every
 TypeScript job.</li>
 </ul>
 <h2 id="what-you-should-now-be-able-to-answer"><a class="header" href="#what-you-should-now-be-able-to-answer">What you should now be able to answer</a></h2>
+<p>Try to answer each one in your own words first. Then open the answer to check.</p>
+<p><strong>1. What are the four HTTP exchanges behind <code>docker pull</code>?</strong></p>
+<details>
+<summary>Answer</summary>
+<ol>
+<li><strong>Knock on <code>/v2/</code>.</strong> The registry answers <code>401</code> and a <code>www-authenticate</code> header saying where to get a token.</li>
+<li><strong>Get a token</strong> from that address (the <code>realm</code>), sending back the <code>service</code> and a <code>scope</code> naming the image.</li>
+<li><strong>Ask for the manifest</strong>, with the token in <code>Authorization</code> and the formats you understand in <code>Accept</code>. For a multi-CPU image this first gives you an index. You then ask again, by digest, for your CPU’s manifest.</li>
+<li><strong>Download the blobs</strong>, the config and every layer, by their digests, and check each one’s size and fingerprint.</li>
+</ol>
+</details>
+<p><strong>2. What is a registry, a manifest, an index, a blob, a layer, a digest?</strong></p>
+<details>
+<summary>Answer</summary>
 <ul>
-<li>What are the four HTTP exchanges behind <code>docker pull</code>?</li>
-<li>What is a registry, a manifest, an index, a blob, a layer, a digest?</li>
-<li>What is an HTTP header, and which two headers tell you what kind of
-file the registry sent and whether it arrived intact?</li>
-<li>Why does a public image still need a token, and how does the client
-find out where to get one?</li>
-<li>Why can an image name fetch <em>two different shapes</em> of JSON?</li>
-<li>How does a digest protect you from a corrupted download?</li>
-<li>How do layers turn into one folder, and what does <code>.wh.foo</code> mean?</li>
+<li><strong>Registry</strong>: a server that stores and hands out images (Docker Hub, <code>ghcr.io</code>, …).</li>
+<li><strong>Manifest</strong>: a small JSON parts list for <em>one</em> image on <em>one</em> kind of computer: a config and the layers, in order.</li>
+<li><strong>Index</strong>: a JSON list of manifests, one per kind of computer. It names no layers itself; it only points.</li>
+<li><strong>Blob</strong>: any file the registry stores, asked for by its digest.</li>
+<li><strong>Layer</strong>: a blob that is a compressed <code>tar</code> of part of the filesystem.</li>
+<li><strong>Digest</strong>: a fingerprint of a file’s bytes (<code>sha256:...</code>). Change one byte and it changes completely.</li>
 </ul>
+</details>
+<p><strong>3. What is an HTTP header, and which two headers tell you what kind of file the registry sent and whether it arrived intact?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>A header is a short <code>name: value</code> label sent along with a request or a reply, describing it. It’s the sticker on the parcel, not the goods inside. <code>content-type</code> says what kind of file the body is (index or manifest). <code>docker-content-digest</code> is the body’s fingerprint. Compute <code>sha256</code> of what you received and compare.</p>
+</details>
+<p><strong>4. Why does a public image still need a token, and how does the client find out where to get one?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Docker Hub wants every request to carry a token, a short-lived pass (five minutes) that says “this client may read this image”. For public images it hands one to anyone who asks, without a password. The client learns where to ask from the <code>401</code> reply’s <code>www-authenticate</code> header: <code>realm</code> is the token server’s address, and <code>service</code> is a value to send back.</p>
+</details>
+<p><strong>5. Why can an image name fetch <em>two different shapes</em> of JSON?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Because a tag can point at an <strong>index</strong> (the image is built for several kinds of CPU) or straight at a <strong>manifest</strong> (it’s built for only one). The <code>content-type</code> header tells you which one arrived. Inside, a manifest has <code>layers</code> and an index has <code>manifests</code>.</p>
+</details>
+<p><strong>6. How does a digest protect you from a corrupted download?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Blobs are <em>named</em> by their digest. After downloading, you compute the fingerprint of the bytes you actually got and compare it with the name you asked for. If even one byte changed on the way, the fingerprints won’t match, and you throw the file away.</p>
+</details>
+<p><strong>7. How do layers turn into one folder, and what does <code>.wh.foo</code> mean?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Unpack layer 1 into an empty folder, then layer 2 on top, and so on, in order. When a file exists in two layers, the later one wins. A file named <code>.wh.foo</code> in a layer means “delete <code>foo</code> from the layers below”. The special name <code>.wh..wh..opq</code> means “empty this folder of everything from below”.</p>
+</details>
 <h2 id="next-chapter"><a class="header" href="#next-chapter">Next chapter</a></h2>
 <p>Chapter 2 sets up the project: installing Node.js and the TypeScript
 compiler, the handful of compiler settings that actually matter (and why

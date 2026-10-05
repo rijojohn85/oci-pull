@@ -33,7 +33,7 @@ wins: fix this file.
 | 2.5 | TypeScript for Go and Python Programmers | done |
 | 3 | Reading an Image Name | done |
 | 4 | The First Call to the Registry | done |
-| 5 | Getting Permission: Tokens | written (awaiting user) |
+| 5 | Getting Permission: Tokens | done |
 | 6 | The Manifest: Trusting Nothing from the Server | planned |
 | 7 | Downloading One Layer | planned |
 | 8 | Downloading Many Layers at Once | planned |
@@ -45,7 +45,7 @@ wins: fix this file.
 ## Current work
 
 - Chapter: 5, Getting Permission: Tokens
-- Phase: awaiting user (written, verified, book built)
+- Phase: done (user committed "finished chapter 5"); Ch6 not started
 - Done so far: all steps. Code verified in a scratch copy: 36 tests
   passing, `tsc` clean. Real runs against Docker Hub, mcr, ghcr, quay.
 - Captures: `.book/captures/ch05/` holds the key captures (saved
@@ -58,9 +58,7 @@ wins: fix this file.
   manifest by media type, and pick the entry for the user's CPU. Ch5 showed
   both `application/vnd.oci.image.index.v1+json` (Docker Hub) and
   `application/vnd.docker.distribution.manifest.list.v2+json` (mcr, ghcr).
-- **Next:** wait for the user to try Ch5. When they say it works, check
-  `oci-pull/` compiles and tests pass (read only), mark Ch5 done, then
-  start Ch6 at the chapter loop, step 1.
+- **Next:** start Ch6 at the chapter loop, step 1, when the user asks.
 
 ## User's code vs the book's
 
@@ -70,6 +68,9 @@ wins: fix this file.
 - The user's `main.ts` prints `registry ` with one space, and prints
   "would pull into" before the api line (the book does it after).
   Cosmetic only.
+
+- The user's `RegistryClient` field is `baseURL`; the book's is `baseUrl`
+  (Ch4). Ch5 had copied `baseURL` by mistake, fixed 2026-10-05.
 
 ## Open questions
 
@@ -81,3 +82,4 @@ wins: fix this file.
 - 2026-09-23 Claude Code: Ch1–3 done; Ch4 written.
 - 2026-09-24 Claude Code: Ch4 done (user committed). Ch5 written and verified.
 - 2026-09-24 Claude Code: moved book state into `.book/` so any agent can resume.
+- 2026-10-05 Claude Code: added a fold-out answer to every recap question in Ch1-5 (61 in all); fixed Ch5 baseURL→baseUrl; fixed the 2.5 primer's claim that JSON.parse returns unknown (it's `any`).

@@ -938,28 +938,124 @@ $ git commit -m "Knock on the registry's front door"
 
 ## What you should now be able to answer
 
-- What does `/v2/` answer on Docker Hub, and on Microsoft's registry?
-  What does each answer mean?
-- Why does our code call `registry-1.docker.io` when the user typed
-  `docker.io`?
-- What's wrong with a test that calls the real Docker Hub?
-- Why does `RegistryClient` take an `HttpClient` in its constructor
-  instead of calling `fetch`? What's the name for that idea?
-- Why does `HttpClient` have one method and not five?
-- Why does `HttpClient.get` return the built-in `Response` instead of a
-  type of our own?
-- What's the difference between a fake and a mock? What does
-  `toHaveBeenCalledWith` check?
-- What does `HttpClient["get"]` mean as a type?
-- What do the angle brackets in `vi.fn<HttpClient["get"]>(...)` do,
-  and what two things go wrong if you leave them off?
-- Why does `headers.get` return `string | null`, and what makes
-  `challenge` a plain `string` afterwards?
-- How is testing a throw from an `async` function different from
-  Chapter 3's `toThrow`? What goes wrong without the `await`?
-- Why did `cli.ts` stop compiling when `main` became `async`?
-- Why does a network failure crash the program instead of printing a
-  tidy message?
+Try to answer each one in your own words first. Then open the answer to check.
+
+**1. What does `/v2/` answer on Docker Hub, and on Microsoft's registry? What does each answer mean?**
+
+<details>
+<summary>Answer</summary>
+
+Docker Hub answers `401` with a `www-authenticate` challenge: "not without a token, and here's where to get one". Microsoft's registry answers `200`: "come in, no token needed for public images".
+
+</details>
+
+**2. Why does our code call `registry-1.docker.io` when the user typed `docker.io`?**
+
+<details>
+<summary>Answer</summary>
+
+`docker.io` is the name people *type*, but Docker Hub's API lives on `registry-1.docker.io`. Asking `docker.io/v2/` gets a `302` redirect to Docker's website. `apiHost` makes that one translation. Every other registry serves its API under its own name.
+
+</details>
+
+**3. What's wrong with a test that calls the real Docker Hub?**
+
+<details>
+<summary>Answer</summary>
+
+It needs the internet, it's slow, and it fails when Docker Hub has a bad day even though your code didn't change. It also can't produce rare answers on demand, like a `401` with no challenge header.
+
+</details>
+
+**4. Why does `RegistryClient` take an `HttpClient` in its constructor instead of calling `fetch`? What's the name for that idea?**
+
+<details>
+<summary>Answer</summary>
+
+So the program can hand it the real client and a test can hand it a pretend one. `RegistryClient` can't tell the difference. It depends on a description (the interface), not on one particular thing (`fetch`). That's the **dependency inversion principle**, the "D" in SOLID.
+
+</details>
+
+**5. Why does `HttpClient` have one method and not five?**
+
+<details>
+<summary>Answer</summary>
+
+Because the registry code needs only "GET this URL". A description should be as small as what its users really need, so fakes stay small too. That's the "I" in SOLID, interface segregation: don't ask for more than you use. It can grow when a real need appears, as it does in Chapter 5.
+
+</details>
+
+**6. Why does `HttpClient.get` return the built-in `Response` instead of a type of our own?**
+
+<details>
+<summary>Answer</summary>
+
+The real client stays a one-liner (`return fetch(url)`). Tests can also build a reply with `new Response(...)`, which is the very class `fetch` returns, so the code under test can't tell a fake reply from a real one.
+
+</details>
+
+**7. What's the difference between a fake and a mock? What does `toHaveBeenCalledWith` check?**
+
+<details>
+<summary>Answer</summary>
+
+A fake is a pretend version that answers whatever the test needs. A mock is a fake that also *takes notes*: it records every call and its arguments. `toHaveBeenCalledWith(x)` asks the mock "were you ever called with exactly these arguments?", for example the right URL.
+
+</details>
+
+**8. What does `HttpClient["get"]` mean as a type?**
+
+<details>
+<summary>Answer</summary>
+
+"The type of the `get` method on `HttpClient`", so `(url: string) => Promise<Response>`. It uses the same square brackets as reading a field from an object, but applied to a type.
+
+</details>
+
+**9. What do the angle brackets in `vi.fn<HttpClient["get"]>(...)` do, and what two things go wrong if you leave them off?**
+
+<details>
+<summary>Answer</summary>
+
+They fill in the blank of `vi.fn`: *which* function the mock pretends to be. Without them, `vi.fn` guesses from `async () => response` a function that takes no arguments. Then (1) its notes are typed as empty, so reading the URL from `get.mock.calls[0]` fails to compile (TS2493). And (2) a wrong pretend reply, like a string instead of a `Response`, isn't caught on the line where you wrote it.
+
+</details>
+
+**10. Why does `headers.get` return `string | null`, and what makes `challenge` a plain `string` afterwards?**
+
+<details>
+<summary>Answer</summary>
+
+Because the header might not be in the reply, and `null` is how the built-in type says "not there". The `if (challenge === null) { throw ... }` check narrows it: after that line, the compiler knows it's a plain `string`.
+
+</details>
+
+**11. How is testing a throw from an `async` function different from Chapter 3's `toThrow`? What goes wrong without the `await`?**
+
+<details>
+<summary>Answer</summary>
+
+An `async` function doesn't throw straight away. It returns a Promise that *rejects* (fails, holding the error) later. So you pass the Promise itself, use `.rejects.toThrow(...)`, and `await` the whole line. Without the `await`, the test function ends before the Promise fails, and the check never runs. Vitest now refuses this with "Promise returned by `expect(actual).rejects.toThrow(expected)` was not awaited".
+
+</details>
+
+**12. Why did `cli.ts` stop compiling when `main` became `async`?**
+
+<details>
+<summary>Answer</summary>
+
+An `async` function returns `Promise<number>`, a box the number will arrive in, and `process.exitCode` wants an actual number. The type check caught it (TS2322), which is the forgotten-`await` bug. The fix is `process.exitCode = await main(...)` at the top level of `cli.ts`.
+
+</details>
+
+**13. Why does a network failure crash the program instead of printing a tidy message?**
+
+<details>
+<summary>Answer</summary>
+
+`fetch` threw its own `TypeError` (the cause was `ENOTFOUND`: no such host), and that isn't one of *our* error classes. `main` re-throws errors it doesn't understand rather than hiding them, as decided in Chapter 3. A friendly message for this case comes in Chapter 12.
+
+</details>
 
 ## Next chapter
 

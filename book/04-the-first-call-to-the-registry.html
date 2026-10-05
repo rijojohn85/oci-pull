@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-97d040ea.js";
+            window.path_to_searchindex_js = "searchindex-c5e56785.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-b48846b6.js"></script>
@@ -942,30 +942,72 @@ $ git add -A
 $ git commit -m "Knock on the registry's front door"
 </code></pre>
 <h2 id="what-you-should-now-be-able-to-answer"><a class="header" href="#what-you-should-now-be-able-to-answer">What you should now be able to answer</a></h2>
-<ul>
-<li>What does <code>/v2/</code> answer on Docker Hub, and on Microsoft’s registry?
-What does each answer mean?</li>
-<li>Why does our code call <code>registry-1.docker.io</code> when the user typed
-<code>docker.io</code>?</li>
-<li>What’s wrong with a test that calls the real Docker Hub?</li>
-<li>Why does <code>RegistryClient</code> take an <code>HttpClient</code> in its constructor
-instead of calling <code>fetch</code>? What’s the name for that idea?</li>
-<li>Why does <code>HttpClient</code> have one method and not five?</li>
-<li>Why does <code>HttpClient.get</code> return the built-in <code>Response</code> instead of a
-type of our own?</li>
-<li>What’s the difference between a fake and a mock? What does
-<code>toHaveBeenCalledWith</code> check?</li>
-<li>What does <code>HttpClient["get"]</code> mean as a type?</li>
-<li>What do the angle brackets in <code>vi.fn&lt;HttpClient["get"]&gt;(...)</code> do,
-and what two things go wrong if you leave them off?</li>
-<li>Why does <code>headers.get</code> return <code>string | null</code>, and what makes
-<code>challenge</code> a plain <code>string</code> afterwards?</li>
-<li>How is testing a throw from an <code>async</code> function different from
-Chapter 3’s <code>toThrow</code>? What goes wrong without the <code>await</code>?</li>
-<li>Why did <code>cli.ts</code> stop compiling when <code>main</code> became <code>async</code>?</li>
-<li>Why does a network failure crash the program instead of printing a
-tidy message?</li>
-</ul>
+<p>Try to answer each one in your own words first. Then open the answer to check.</p>
+<p><strong>1. What does <code>/v2/</code> answer on Docker Hub, and on Microsoft’s registry? What does each answer mean?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Docker Hub answers <code>401</code> with a <code>www-authenticate</code> challenge: “not without a token, and here’s where to get one”. Microsoft’s registry answers <code>200</code>: “come in, no token needed for public images”.</p>
+</details>
+<p><strong>2. Why does our code call <code>registry-1.docker.io</code> when the user typed <code>docker.io</code>?</strong></p>
+<details>
+<summary>Answer</summary>
+<p><code>docker.io</code> is the name people <em>type</em>, but Docker Hub’s API lives on <code>registry-1.docker.io</code>. Asking <code>docker.io/v2/</code> gets a <code>302</code> redirect to Docker’s website. <code>apiHost</code> makes that one translation. Every other registry serves its API under its own name.</p>
+</details>
+<p><strong>3. What’s wrong with a test that calls the real Docker Hub?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>It needs the internet, it’s slow, and it fails when Docker Hub has a bad day even though your code didn’t change. It also can’t produce rare answers on demand, like a <code>401</code> with no challenge header.</p>
+</details>
+<p><strong>4. Why does <code>RegistryClient</code> take an <code>HttpClient</code> in its constructor instead of calling <code>fetch</code>? What’s the name for that idea?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>So the program can hand it the real client and a test can hand it a pretend one. <code>RegistryClient</code> can’t tell the difference. It depends on a description (the interface), not on one particular thing (<code>fetch</code>). That’s the <strong>dependency inversion principle</strong>, the “D” in SOLID.</p>
+</details>
+<p><strong>5. Why does <code>HttpClient</code> have one method and not five?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Because the registry code needs only “GET this URL”. A description should be as small as what its users really need, so fakes stay small too. That’s the “I” in SOLID, interface segregation: don’t ask for more than you use. It can grow when a real need appears, as it does in Chapter 5.</p>
+</details>
+<p><strong>6. Why does <code>HttpClient.get</code> return the built-in <code>Response</code> instead of a type of our own?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>The real client stays a one-liner (<code>return fetch(url)</code>). Tests can also build a reply with <code>new Response(...)</code>, which is the very class <code>fetch</code> returns, so the code under test can’t tell a fake reply from a real one.</p>
+</details>
+<p><strong>7. What’s the difference between a fake and a mock? What does <code>toHaveBeenCalledWith</code> check?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>A fake is a pretend version that answers whatever the test needs. A mock is a fake that also <em>takes notes</em>: it records every call and its arguments. <code>toHaveBeenCalledWith(x)</code> asks the mock “were you ever called with exactly these arguments?”, for example the right URL.</p>
+</details>
+<p><strong>8. What does <code>HttpClient["get"]</code> mean as a type?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>“The type of the <code>get</code> method on <code>HttpClient</code>”, so <code>(url: string) =&gt; Promise&lt;Response&gt;</code>. It uses the same square brackets as reading a field from an object, but applied to a type.</p>
+</details>
+<p><strong>9. What do the angle brackets in <code>vi.fn&lt;HttpClient["get"]&gt;(...)</code> do, and what two things go wrong if you leave them off?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>They fill in the blank of <code>vi.fn</code>: <em>which</em> function the mock pretends to be. Without them, <code>vi.fn</code> guesses from <code>async () =&gt; response</code> a function that takes no arguments. Then (1) its notes are typed as empty, so reading the URL from <code>get.mock.calls[0]</code> fails to compile (TS2493). And (2) a wrong pretend reply, like a string instead of a <code>Response</code>, isn’t caught on the line where you wrote it.</p>
+</details>
+<p><strong>10. Why does <code>headers.get</code> return <code>string | null</code>, and what makes <code>challenge</code> a plain <code>string</code> afterwards?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Because the header might not be in the reply, and <code>null</code> is how the built-in type says “not there”. The <code>if (challenge === null) { throw ... }</code> check narrows it: after that line, the compiler knows it’s a plain <code>string</code>.</p>
+</details>
+<p><strong>11. How is testing a throw from an <code>async</code> function different from Chapter 3’s <code>toThrow</code>? What goes wrong without the <code>await</code>?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>An <code>async</code> function doesn’t throw straight away. It returns a Promise that <em>rejects</em> (fails, holding the error) later. So you pass the Promise itself, use <code>.rejects.toThrow(...)</code>, and <code>await</code> the whole line. Without the <code>await</code>, the test function ends before the Promise fails, and the check never runs. Vitest now refuses this with “Promise returned by <code>expect(actual).rejects.toThrow(expected)</code> was not awaited”.</p>
+</details>
+<p><strong>12. Why did <code>cli.ts</code> stop compiling when <code>main</code> became <code>async</code>?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>An <code>async</code> function returns <code>Promise&lt;number&gt;</code>, a box the number will arrive in, and <code>process.exitCode</code> wants an actual number. The type check caught it (TS2322), which is the forgotten-<code>await</code> bug. The fix is <code>process.exitCode = await main(...)</code> at the top level of <code>cli.ts</code>.</p>
+</details>
+<p><strong>13. Why does a network failure crash the program instead of printing a tidy message?</strong></p>
+<details>
+<summary>Answer</summary>
+<p><code>fetch</code> threw its own <code>TypeError</code> (the cause was <code>ENOTFOUND</code>: no such host), and that isn’t one of <em>our</em> error classes. <code>main</code> re-throws errors it doesn’t understand rather than hiding them, as decided in Chapter 3. A friendly message for this case comes in Chapter 12.</p>
+</details>
 <h2 id="next-chapter"><a class="header" href="#next-chapter">Next chapter</a></h2>
 <p>Docker Hub said no, and told us where to ask. Chapter 5 reads that
 challenge (<code>realm</code>, <code>service</code>), asks <code>auth.docker.io</code> for a token, and

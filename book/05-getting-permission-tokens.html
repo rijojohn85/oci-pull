@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-97d040ea.js";
+            window.path_to_searchindex_js = "searchindex-c5e56785.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-b48846b6.js"></script>
@@ -728,7 +728,7 @@ function challengeOf(url: string, response: Response): string {
 </blockquote>
 <p>Here it is:</p>
 <pre><code class="language-ts">    if (response.status === 401) {
-      return { kind: "needs-token", challenge: challengeOf(this.baseURL, response) }
+      return { kind: "needs-token", challenge: challengeOf(this.baseUrl, response) }
     }
 </code></pre>
 <p><code>checkApi</code> <em>decides</em> the same things it did before: <code>200</code> is open,
@@ -749,14 +749,14 @@ import { DEFAULT_REGISTRY } from "./reference.ts"
 export class RegistryClient {
   private readonly http: HttpClient
   private readonly auth: Authenticator
-  private readonly baseURL: string
+  private readonly baseUrl: string
   // No readonly: starts empty, set once the first token arrives.
   private token: string | undefined
 
   constructor(http: HttpClient, registry: string, auth: Authenticator) {
     this.http = http
     this.auth = auth
-    this.baseURL = `https://${apiHost(registry)}/v2/`
+    this.baseUrl = `https://${apiHost(registry)}/v2/`
   }
 </code></pre>
 <p><code>private token: string | undefined</code> with no <code>= ...</code> starts out as
@@ -892,7 +892,7 @@ and back could change them.</p>
 <p>And the method, inside the class above <code>authorizedGet</code>:</p>
 <pre><code class="language-ts">  // reference is a tag ("latest") or a digest ("sha256:...").
   async fetchManifest(repository: string, reference: string): Promise&lt;RawManifest&gt; {
-    const url = `${this.baseURL}${repository}/manifests/${reference}`
+    const url = `${this.baseUrl}${repository}/manifests/${reference}`
     // The scope asks for exactly one thing: pull access to this repository.
     const response = await this.authorizedGet(url, `repository:${repository}:pull`, {
       accept: MANIFEST_TYPES.join(", "),
@@ -1272,30 +1272,82 @@ $ git add -A
 $ git commit -m "Fetch a token and the manifest"
 </code></pre>
 <h2 id="what-you-should-now-be-able-to-answer"><a class="header" href="#what-you-should-now-be-able-to-answer">What you should now be able to answer</a></h2>
-<ul>
-<li>What three requests does it take to get a manifest from Docker Hub,
-and what does each one send and get back?</li>
-<li>What are <code>realm</code>, <code>service</code>, and <code>scope</code> in a challenge? Why do we
-build our own scope instead of using the challenge’s?</li>
-<li>Why did adding <code>headers?</code> to <code>HttpClient.get</code> break nothing, while
-adding <code>auth</code> to <code>RegistryClient</code>’s constructor broke six places?</li>
-<li>What’s the difference between a <code>Record&lt;string, string&gt;</code> and a
-<code>Map&lt;string, string&gt;</code>, and why do we use each where we do?</li>
-<li>Why is <code>Authenticator</code> an interface? What would adding password login
-change, and what would it leave alone? What’s the name of that idea?</li>
-<li>Why is <code>body</code> typed <code>unknown</code> and not left as <code>any</code>? What does each
-of the four checks do?</li>
-<li>Why build the token address with <code>URL</code> instead of a template string?</li>
-<li>What does <code>...</code> mean in <code>{ ...headers }</code>, and what does it mean in
-<code>(...responses: Response[])</code>?</li>
-<li>Why must a fake never give the same <code>Response</code> object to two calls?</li>
-<li>What does <code>mockResolvedValueOnce</code> do? Why does <code>replyingInTurn</code> have
-no default reply?</li>
-<li>What does <code>neverAuth</code> check, and why doesn’t it need to be a mock?</li>
-<li>Why does <code>objectContaining</code> make a test less likely to break for no
-reason?</li>
-<li>Why does a missing Docker Hub repository answer <code>401</code> and not <code>404</code>?</li>
-</ul>
+<p>Try to answer each one in your own words first. Then open the answer to check.</p>
+<p><strong>1. What three requests does it take to get a manifest from Docker Hub, and what does each one send and get back?</strong></p>
+<details>
+<summary>Answer</summary>
+<ol>
+<li><strong>GET the manifest</strong> with no token. You get back <code>401</code> plus a challenge naming <code>realm</code>, <code>service</code> and <code>scope</code>.</li>
+<li><strong>GET the token server</strong> (<code>realm</code>) with <code>?service=...&amp;scope=...</code>. You get back JSON holding <code>token</code> (plus <code>expires_in</code>: 300 seconds).</li>
+<li><strong>GET the manifest again</strong>, with <code>Authorization: Bearer &lt;token&gt;</code> and an <code>Accept</code> list of formats. You get back <code>200</code>, the manifest bytes, and the <code>content-type</code> and <code>docker-content-digest</code> headers.</li>
+</ol>
+</details>
+<p><strong>2. What are <code>realm</code>, <code>service</code>, and <code>scope</code> in a challenge? Why do we build our own scope instead of using the challenge’s?</strong></p>
+<details>
+<summary>Answer</summary>
+<p><code>realm</code> is the token server’s address. <code>service</code> says which registry the token is for. <code>scope</code> is the permission being asked for, like <code>repository:library/alpine:pull</code>. We build our own because we already know which repository we want, while challenges can’t be trusted to name it: the front door sends no scope at all, and GitHub’s sends the placeholder <code>repository:user/image:pull</code>.</p>
+</details>
+<p><strong>3. Why did adding <code>headers?</code> to <code>HttpClient.get</code> break nothing, while adding <code>auth</code> to <code>RegistryClient</code>’s constructor broke six places?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>The <code>?</code> made <code>headers</code> <em>optional</em>: every existing one-argument call stayed valid, the fakes still had the right shape, and even <code>toHaveBeenCalledWith(url)</code> still matched. <code>auth</code> is <em>required</em>, so every existing <code>new RegistryClient(http, registry)</code> (five in tests, one in <code>main</code>) was now missing an argument. The compiler listed each one.</p>
+</details>
+<p><strong>4. What’s the difference between a <code>Record&lt;string, string&gt;</code> and a <code>Map&lt;string, string&gt;</code>, and why do we use each where we do?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>A <code>Record&lt;string, string&gt;</code> is a plain object used as a lookup table. It’s what <code>fetch</code> expects for headers, so <code>RequestHeaders</code> is one. A <code>Map</code> is a real lookup table with <code>get</code>/<code>set</code>, whose <code>get</code> clearly returns <code>undefined</code> for a missing key. Inside <code>parseChallenge</code>, nobody outside sees the table, so the clearer <code>Map</code> is used.</p>
+</details>
+<p><strong>5. Why is <code>Authenticator</code> an interface? What would adding password login change, and what would it leave alone? What’s the name of that idea?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>So the <em>way</em> a token is fetched can change without touching the code that decides <em>when</em> one is needed. Password login means writing a new class, <code>PasswordAuthenticator implements Authenticator</code>, and choosing it in <code>main</code>. <code>RegistryClient</code> and <code>AnonymousAuthenticator</code> stay untouched. That’s the <strong>open/closed principle</strong>, the “O” in SOLID: open to new behavior, closed to rewrites.</p>
+</details>
+<p><strong>6. Why is <code>body</code> typed <code>unknown</code> and not left as <code>any</code>? What does each of the four checks do?</strong></p>
+<details>
+<summary>Answer</summary>
+<p><code>response.json()</code> is typed <code>any</code>. Kept as <code>any</code>, <code>return body.token</code> would compile with no checks, and a reply without a token would pass <code>undefined</code> along typed as a <code>string</code>. <code>unknown</code> forces the checks:</p>
+<ol>
+<li><code>typeof body !== "object"</code> rules out strings, numbers and so on.</li>
+<li><code>body === null</code> is needed because <code>typeof null</code> is <code>"object"</code>.</li>
+<li><code>"token" in body</code> checks that the field exists.</li>
+<li><code>typeof body.token !== "string"</code> makes sure it’s text.</li>
+</ol>
+</details>
+<p><strong>7. Why build the token address with <code>URL</code> instead of a template string?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>The scope contains <code>:</code> and <code>/</code>, which have special meanings in an address. <code>searchParams.set</code> escapes them (<code>%3A</code>, <code>%2F</code>) for us. <code>URL</code> also copes with a <code>realm</code> that already has a <code>?</code> in it.</p>
+</details>
+<p><strong>8. What does <code>...</code> mean in <code>{ ...headers }</code>, and what does it mean in <code>(...responses: Response[])</code>?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>In <code>{ ...headers }</code> it <em>spreads</em>: it copies every field of <code>headers</code> into a new object (like Python’s <code>{**headers}</code>). In a parameter list it <em>gathers</em>: all the arguments are collected into one array (like Python’s <code>*args</code> or Go’s <code>...Response</code>).</p>
+</details>
+<p><strong>9. Why must a fake never give the same <code>Response</code> object to two calls?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>A <code>Response</code>’s body can be read only once. A second read fails with “Body is unusable: Body has already been read”. So helpers like <code>unauthorized()</code> and <code>manifest()</code> build a fresh reply every time they’re called.</p>
+</details>
+<p><strong>10. What does <code>mockResolvedValueOnce</code> do? Why does <code>replyingInTurn</code> have no default reply?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>It queues one reply for the next call that hasn’t been answered yet, so calls get their replies in order. There’s no default, so an unexpected extra call gets <code>undefined</code>. The code then crashes on the very next line and the test points straight at it, instead of quietly receiving a made-up answer.</p>
+</details>
+<p><strong>11. What does <code>neverAuth</code> check, and why doesn’t it need to be a mock?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>It checks that the code under test never asks for a token (as with <code>checkApi</code>, or an open registry), because it throws if called. It records nothing, because there’s nothing to inspect afterwards: being called at all is already the failure.</p>
+</details>
+<p><strong>12. Why does <code>objectContaining</code> make a test less likely to break for no reason?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>It checks only the fields you list (here <code>authorization</code>) and ignores the rest (like <code>accept</code>). If an unrelated header changes later, the test still passes, because it checks only what it’s actually about.</p>
+</details>
+<p><strong>13. Why does a missing Docker Hub repository answer <code>401</code> and not <code>404</code>?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>If Docker Hub told strangers “no such repository”, anyone could find out whether a <em>private</em> repository exists by asking. So it gives the same answer for “doesn’t exist” and “not yours”: the token doesn’t grant access, and the retry gets <code>401</code> again.</p>
+</details>
 <h2 id="next-chapter"><a class="header" href="#next-chapter">Next chapter</a></h2>
 <p>We have the manifest’s bytes but haven’t looked inside. Chapter 6
 reads them, and the lesson is to trust nothing the server sends.

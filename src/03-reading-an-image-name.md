@@ -816,22 +816,106 @@ $ git commit -m "Parse image references"
 
 ## What you should now be able to answer
 
-- What are the four parts of an image name, and which are optional?
-- What three defaults does a bare `alpine` pick up?
-- How do you tell a registry from the first part of a repository?
-- Why is `Reference` a union of two interfaces instead of one interface
-  with two optional fields?
-- What does the `kind` field do, and what happens if you forget a
-  `case`?
-- Why does `localhost:5000/dev/app` have no tag?
-- Why do `extractDigest` and `extractTag` both return the leftover
-  string, and what broke when one of them didn't?
-- Why does `parseReference` need no `let` at all?
-- Why does `parseReference` throw its own error class instead of a
-  plain `Error`?
-- Why is `expect(() => parseReference("")).toThrow(...)` wrapped
-  in a function?
-- Why did `argv.length !== 2` have to become a check on the values?
+Try to answer each one in your own words first. Then open the answer to check.
+
+**1. What are the four parts of an image name, and which are optional?**
+
+<details>
+<summary>Answer</summary>
+
+Registry, repository, tag, and digest (after `@`). Only the repository is required. The rest have defaults or can be left out.
+
+</details>
+
+**2. What three defaults does a bare `alpine` pick up?**
+
+<details>
+<summary>Answer</summary>
+
+Registry `docker.io`, the `library/` prefix (because it's Docker Hub and the name has no `/`), and tag `latest`. So it becomes `docker.io/library/alpine:latest`.
+
+</details>
+
+**3. How do you tell a registry from the first part of a repository?**
+
+<details>
+<summary>Answer</summary>
+
+Look at the part before the first `/`. It's a registry only if it is exactly `localhost`, or it contains a `.` (a hostname) or a `:` (a port). Otherwise it's part of the repository, as in `rijojohn85/oci-pull`.
+
+</details>
+
+**4. Why is `Reference` a union of two interfaces instead of one interface with two optional fields?**
+
+<details>
+<summary>Answer</summary>
+
+One interface with `tag?` and `digest?` would allow both to be missing, or both to be set. Every user of a `Reference` would then have to check for those nonsense cases. The union allows exactly one: tagged *or* digested. The impossible states can't even be written.
+
+</details>
+
+**5. What does the `kind` field do, and what happens if you forget a `case`?**
+
+<details>
+<summary>Answer</summary>
+
+`kind` is the field that says which shape you hold (`"tag"` or `"digest"`). A `switch` on it narrows the type, so each `case` can use that shape's own field. Forget a `case` and the function fails to compile ("Function lacks ending return statement..."). The compiler finds the shape you forgot.
+
+</details>
+
+**6. Why does `localhost:5000/dev/app` have no tag?**
+
+<details>
+<summary>Answer</summary>
+
+A `:` only starts a tag if it comes *after* the last `/`. Here the only colon comes before it, so it's the port of the registry `localhost:5000`. With no tag given, the reference gets the default, `latest`.
+
+</details>
+
+**7. Why do `extractDigest` and `extractTag` both return the leftover string, and what broke when one of them didn't?**
+
+<details>
+<summary>Answer</summary>
+
+Each step cuts a piece off the end, and the next step must work on what's left. A function can't change the caller's string, so it has to hand the shorter string back. The first draft of `extractDigest` returned only the digest. `extractTag` then still saw `alpine@sha256:...`, took the hex after the last `:` as a tag, and left `alpine@sha256` as the repository. Every test with an `@` failed with "not a valid repository name".
+
+</details>
+
+**8. Why does `parseReference` need no `let` at all?**
+
+<details>
+<summary>Answer</summary>
+
+Each step's result gets its own `const` name (`restAfterDigest`, `restAfterTag`) instead of reusing one variable. Nothing is ever reassigned, so every name means one thing on every line.
+
+</details>
+
+**9. Why does `parseReference` throw its own error class instead of a plain `Error`?**
+
+<details>
+<summary>Answer</summary>
+
+So callers can tell "the user typed a bad name" apart from every other failure with a single `instanceof` check. `main` prints the message and exits `1` for this one, and re-throws anything else. The class also keeps the bad `input` as a field, so nobody has to dig it out of the message.
+
+</details>
+
+**10. Why is `expect(() => parseReference("")).toThrow(...)` wrapped in a function?**
+
+<details>
+<summary>Answer</summary>
+
+Without the wrapper, `parseReference("")` would run, and throw, while the argument to `expect` is being worked out, before `expect` ever gets control. The test would crash instead of passing. Handing `expect` a function lets it call that function itself and catch the throw.
+
+</details>
+
+**11. Why did `argv.length !== 2` have to become a check on the values?**
+
+<details>
+<summary>Answer</summary>
+
+Because of `noUncheckedIndexedAccess`, `image` and `outputDir` are typed `string | undefined`, and checking the array's length doesn't change that for the compiler. Checking `image === undefined || outputDir === undefined` does: after that `if`, both are plain strings (narrowing).
+
+</details>
 
 ## Next chapter
 

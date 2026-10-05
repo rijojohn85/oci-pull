@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-97d040ea.js";
+            window.path_to_searchindex_js = "searchindex-c5e56785.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-b48846b6.js"></script>
@@ -632,17 +632,54 @@ the clock, which is the testing skill that transfers to every
 TypeScript job.</li>
 </ul>
 <h2 id="what-you-should-now-be-able-to-answer"><a class="header" href="#what-you-should-now-be-able-to-answer">What you should now be able to answer</a></h2>
+<p>Try to answer each one in your own words first. Then open the answer to check.</p>
+<p><strong>1. What are the four HTTP exchanges behind <code>docker pull</code>?</strong></p>
+<details>
+<summary>Answer</summary>
+<ol>
+<li><strong>Knock on <code>/v2/</code>.</strong> The registry answers <code>401</code> and a <code>www-authenticate</code> header saying where to get a token.</li>
+<li><strong>Get a token</strong> from that address (the <code>realm</code>), sending back the <code>service</code> and a <code>scope</code> naming the image.</li>
+<li><strong>Ask for the manifest</strong>, with the token in <code>Authorization</code> and the formats you understand in <code>Accept</code>. For a multi-CPU image this first gives you an index. You then ask again, by digest, for your CPU’s manifest.</li>
+<li><strong>Download the blobs</strong>, the config and every layer, by their digests, and check each one’s size and fingerprint.</li>
+</ol>
+</details>
+<p><strong>2. What is a registry, a manifest, an index, a blob, a layer, a digest?</strong></p>
+<details>
+<summary>Answer</summary>
 <ul>
-<li>What are the four HTTP exchanges behind <code>docker pull</code>?</li>
-<li>What is a registry, a manifest, an index, a blob, a layer, a digest?</li>
-<li>What is an HTTP header, and which two headers tell you what kind of
-file the registry sent and whether it arrived intact?</li>
-<li>Why does a public image still need a token, and how does the client
-find out where to get one?</li>
-<li>Why can an image name fetch <em>two different shapes</em> of JSON?</li>
-<li>How does a digest protect you from a corrupted download?</li>
-<li>How do layers turn into one folder, and what does <code>.wh.foo</code> mean?</li>
+<li><strong>Registry</strong>: a server that stores and hands out images (Docker Hub, <code>ghcr.io</code>, …).</li>
+<li><strong>Manifest</strong>: a small JSON parts list for <em>one</em> image on <em>one</em> kind of computer: a config and the layers, in order.</li>
+<li><strong>Index</strong>: a JSON list of manifests, one per kind of computer. It names no layers itself; it only points.</li>
+<li><strong>Blob</strong>: any file the registry stores, asked for by its digest.</li>
+<li><strong>Layer</strong>: a blob that is a compressed <code>tar</code> of part of the filesystem.</li>
+<li><strong>Digest</strong>: a fingerprint of a file’s bytes (<code>sha256:...</code>). Change one byte and it changes completely.</li>
 </ul>
+</details>
+<p><strong>3. What is an HTTP header, and which two headers tell you what kind of file the registry sent and whether it arrived intact?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>A header is a short <code>name: value</code> label sent along with a request or a reply, describing it. It’s the sticker on the parcel, not the goods inside. <code>content-type</code> says what kind of file the body is (index or manifest). <code>docker-content-digest</code> is the body’s fingerprint. Compute <code>sha256</code> of what you received and compare.</p>
+</details>
+<p><strong>4. Why does a public image still need a token, and how does the client find out where to get one?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Docker Hub wants every request to carry a token, a short-lived pass (five minutes) that says “this client may read this image”. For public images it hands one to anyone who asks, without a password. The client learns where to ask from the <code>401</code> reply’s <code>www-authenticate</code> header: <code>realm</code> is the token server’s address, and <code>service</code> is a value to send back.</p>
+</details>
+<p><strong>5. Why can an image name fetch <em>two different shapes</em> of JSON?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Because a tag can point at an <strong>index</strong> (the image is built for several kinds of CPU) or straight at a <strong>manifest</strong> (it’s built for only one). The <code>content-type</code> header tells you which one arrived. Inside, a manifest has <code>layers</code> and an index has <code>manifests</code>.</p>
+</details>
+<p><strong>6. How does a digest protect you from a corrupted download?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Blobs are <em>named</em> by their digest. After downloading, you compute the fingerprint of the bytes you actually got and compare it with the name you asked for. If even one byte changed on the way, the fingerprints won’t match, and you throw the file away.</p>
+</details>
+<p><strong>7. How do layers turn into one folder, and what does <code>.wh.foo</code> mean?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Unpack layer 1 into an empty folder, then layer 2 on top, and so on, in order. When a file exists in two layers, the later one wins. A file named <code>.wh.foo</code> in a layer means “delete <code>foo</code> from the layers below”. The special name <code>.wh..wh..opq</code> means “empty this folder of everything from below”.</p>
+</details>
 <h2 id="next-chapter"><a class="header" href="#next-chapter">Next chapter</a></h2>
 <p>Chapter 2 sets up the project: installing Node.js and the TypeScript
 compiler, the handful of compiler settings that actually matter (and why
@@ -1032,16 +1069,42 @@ updates it whenever you add or upgrade something.</p>
     └── main.test.ts
 </code></pre>
 <h2 id="what-you-should-now-be-able-to-answer-1"><a class="header" href="#what-you-should-now-be-able-to-answer-1">What you should now be able to answer</a></h2>
-<ul>
-<li>Which of Node, <code>tsc</code>, and Vitest checks types? Which ones run code?</li>
-<li>Why does <code>npm run check</code> have to run two commands?</li>
-<li>What does <code>"type": "module"</code> in <code>package.json</code> change?</li>
-<li>Why do imports in this project end in <code>.ts</code>, and what setting allows
-that?</li>
-<li>Why is <code>cli.ts</code> a separate file from <code>main.ts</code>?</li>
-<li>Why does <code>main</code> return a number instead of calling <code>process.exit</code>?</li>
-<li>What does <code>--save-dev</code> mean, and why pin <code>@types/node</code> to <code>22</code>?</li>
-</ul>
+<p>Try to answer each one in your own words first. Then open the answer to check.</p>
+<p><strong>1. Which of Node, <code>tsc</code>, and Vitest checks types? Which ones run code?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Only <code>tsc</code> checks types. Node and Vitest <em>run</em> code, and they do it by deleting the type labels first. They never check them. (<code>tsc</code> can also build <code>.js</code> files, which Chapter 12 uses.)</p>
+</details>
+<p><strong>2. Why does <code>npm run check</code> have to run two commands?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Because neither one is enough alone. The tests (Vitest) prove the code <em>does</em> the right thing but ignore types: the <code>oops.test.ts</code> with a wrong type still passed. The type check (<code>tsc</code>) proves the types are true but runs nothing. <code>check</code> runs both.</p>
+</details>
+<p><strong>3. What does <code>"type": "module"</code> in <code>package.json</code> change?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>It tells Node to treat every file in the project as a modern module, using <code>import</code>/<code>export</code> instead of the older <code>require()</code>. (It’s also what allows <code>await</code> at the top level of a file, used in Chapter 4.)</p>
+</details>
+<p><strong>4. Why do imports in this project end in <code>.ts</code>, and what setting allows that?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Node runs the <code>.ts</code> files directly, with no build step, so an import must name the real file, <code>./main.ts</code>. The <code>rewriteRelativeImportExtensions</code> setting allows writing <code>.ts</code> there. When Chapter 12 builds real <code>.js</code>, it rewrites the imports to <code>./main.js</code>.</p>
+</details>
+<p><strong>5. Why is <code>cli.ts</code> a separate file from <code>main.ts</code>?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Importing a file must never <em>run the program</em>. Tests import <code>main.ts</code>. If it called <code>main(...)</code> itself, every test would start a pull. So <code>main.ts</code> only defines things, and <code>cli.ts</code> is the one file that kicks the program off. One file, one job (single responsibility).</p>
+</details>
+<p><strong>6. Why does <code>main</code> return a number instead of calling <code>process.exit</code>?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>A function that returns a value is easy to test: call it and check the number. A function that ends the process would end the test run too. <code>cli.ts</code> puts the returned number into <code>process.exitCode</code>, and Node exits with it after finishing normally.</p>
+</details>
+<p><strong>7. What does <code>--save-dev</code> mean, and why pin <code>@types/node</code> to <code>22</code>?</strong></p>
+<details>
+<summary>Answer</summary>
+<p><code>--save-dev</code> marks a package as needed to <em>develop</em> the project (compiler, test runner, type definitions), not to run it. It goes under <code>devDependencies</code>. <code>@types/node@22</code> describes Node’s built-in functions. Pinning it to the same major version as the Node you run means the types describe the functions you actually have.</p>
+</details>
 <h2 id="next-chapter-1"><a class="header" href="#next-chapter-1">Next chapter</a></h2>
 <p>Chapter 2.5 is a short primer, slower on purpose, for readers coming
 from Go and Python: how TypeScript’s idea of a type differs from both
@@ -1168,7 +1231,9 @@ want to pass an object with extras, naming it says so out loud.</p>
 <p>Chapter 2 showed this with a test that passed despite a type error.
 Here’s why it matters for a program that talks to a server.</p>
 <p><code>JSON.parse</code> turns text into a value. What type does it return? It
-can’t know — the text could be anything. So it returns <code>unknown</code>:</p>
+can’t know — the text could be anything. Its declared return type is
+actually <code>any</code>, which switches checking off (more on that below), so
+this book always stores the result as <code>unknown</code> instead:</p>
 <pre><code class="language-ts">const raw: unknown = JSON.parse('{"size": 3630321}')
 console.log(raw.size)
 </code></pre>
@@ -1623,24 +1688,57 @@ const s = first(["a", "b"])  // s: string | undefined
 function — the “run at most N of these at a time” limiter — and
 explains it fully then. Until then, you only need to read them.</p>
 <h2 id="what-you-should-now-be-able-to-answer-2"><a class="header" href="#what-you-should-now-be-able-to-answer-2">What you should now be able to answer</a></h2>
-<ul>
-<li>Why does an object with extra fields fit a type that doesn’t mention
-them — and why is the same object rejected when written directly in
-the call?</li>
-<li>What’s the difference between <code>unknown</code> and <code>any</code>, and which one does
-<code>JSON.parse</code> deserve?</li>
-<li>What does <code>?</code> after a field name mean? What do <code>??</code> and <code>?.</code> do?</li>
-<li>Why <code>===</code> and never <code>==</code>? What’s the one exception?</li>
-<li>Semicolons are optional. When does leaving one out break the code?</li>
-<li>How do you say “one of these three strings”? How does a <code>switch</code> on
-a shared field let the compiler know which shape you hold?</li>
-<li>Why is a caught error <code>unknown</code>, and how do you get at its fields?</li>
-<li>Does <code>async</code> code in Node run in parallel? What does <code>await</code> pause?
-What’s the difference between two <code>await</code>s in a row and
-<code>Promise.all</code>?</li>
-<li>Why must some imports say <code>type</code>?</li>
-<li>Why does <code>Stopwatch</code> take a <code>Clock</code> instead of calling <code>Date.now()</code>?</li>
-</ul>
+<p>Try to answer each one in your own words first. Then open the answer to check.</p>
+<p><strong>1. Why does an object with extra fields fit a type that doesn’t mention them, and why is the same object rejected when written directly in the call?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>A type is a <em>shape</em>: anything with the required fields fits, and extra fields are ignored. An object in a variable may be used elsewhere, so its extras are none of this function’s business. An object written directly in the call exists only there, so a field the type doesn’t mention is almost always a mistake, like the typo <code>timeeout</code>. The compiler’s <em>excess property check</em> catches it in that case only.</p>
+</details>
+<p><strong>2. What’s the difference between <code>unknown</code> and <code>any</code>, and which one does <code>JSON.parse</code> deserve?</strong></p>
+<details>
+<summary>Answer</summary>
+<p><code>unknown</code> means “a value I know nothing about”: you can’t use it until you’ve checked what it is (narrowing). <code>any</code> switches type checking <em>off</em> for that value and everything made from it, so typos compile and crash at run time. <code>JSON.parse</code> is declared as returning <code>any</code>, but it deserves <code>unknown</code>. Store its result as <code>const raw: unknown = JSON.parse(...)</code> and check before use.</p>
+</details>
+<p><strong>3. What does <code>?</code> after a field name mean? What do <code>??</code> and <code>?.</code> do?</strong></p>
+<details>
+<summary>Answer</summary>
+<p><code>field?:</code> means the field is optional: it may be missing, so its type includes <code>undefined</code>. <code>a ?? b</code> gives <code>a</code>, unless <code>a</code> is <code>undefined</code> or <code>null</code>, and then gives <code>b</code>. <code>a?.b</code> gives <code>a.b</code>, unless <code>a</code> is <code>undefined</code> or <code>null</code>, and then gives <code>undefined</code> instead of crashing.</p>
+</details>
+<p><strong>4. Why <code>===</code> and never <code>==</code>? What’s the one exception?</strong></p>
+<details>
+<summary>Answer</summary>
+<p><code>==</code> converts one side to the other’s type before comparing, and the conversion rules are inconsistent (<code>0 == ""</code> is true, <code>null == 0</code> is false). <code>===</code> compares what’s actually there, like Go’s <code>==</code>. The exception is <code>x == null</code>, which is the short, deliberate way to ask “is this <code>null</code> <em>or</em> <code>undefined</code>?”. This project writes <code>=== undefined</code> instead, because our code never produces <code>null</code>.</p>
+</details>
+<p><strong>5. Semicolons are optional. When does leaving one out break the code?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>When a new statement <em>starts</em> with <code>[</code>, <code>(</code> or a backtick. JavaScript then glues it onto the line above (for example, <code>"tag"[1, 2]</code>). Put a <code>;</code> at the start of such a line.</p>
+</details>
+<p><strong>6. How do you say “one of these three strings”? How does a <code>switch</code> on a shared field let the compiler know which shape you hold?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Write a union of exact strings: <code>type Arch = "amd64" | "arm64" | "riscv64"</code>. For objects, give every shape a shared field typed as one exact string (like <code>mediaType</code> or <code>kind</code>). In each <code>case</code> of a <code>switch</code> on that field, the compiler knows which shape you have, so its own fields are allowed. Leave a shape unhandled and the function stops compiling.</p>
+</details>
+<p><strong>7. Why is a caught error <code>unknown</code>, and how do you get at its fields?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Because JavaScript lets you <code>throw</code> <em>anything</em>, not just <code>Error</code> objects, so the compiler can’t know what arrives. Check it with <code>instanceof YourError</code>: inside that <code>if</code>, it’s narrowed and its fields are available. Re-throw anything you don’t recognise.</p>
+</details>
+<p><strong>8. Does <code>async</code> code in Node run in parallel? What does <code>await</code> pause? What’s the difference between two <code>await</code>s in a row and <code>Promise.all</code>?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>No. One thread runs all your code, so nothing you write runs at the same time as anything else. <code>await</code> pauses <em>only the function it’s in</em> until the Promise has its value, and other work carries on meanwhile. Two <code>await</code>s in a row run one after the other (300 ms + 300 ms = 600 ms). <code>Promise.all</code> starts both first, then waits for both (about 300 ms).</p>
+</details>
+<p><strong>9. Why must some imports say <code>type</code>?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Types are deleted before the program runs. With <code>verbatimModuleSyntax</code> on, an import that is only a type must be marked <code>type</code>, so the deleting step knows to drop it. Otherwise Node would try to import a name that doesn’t exist at run time.</p>
+</details>
+<p><strong>10. Why does <code>Stopwatch</code> take a <code>Clock</code> instead of calling <code>Date.now()</code>?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>So it can be handed a pretend clock in a test and time can be moved forward by hand, with no real waiting. <code>Stopwatch</code> depends on a description (the <code>Clock</code> interface) rather than one concrete thing (<code>Date.now</code>). That’s dependency inversion, the trick behind every fake in this book.</p>
+</details>
 <h2 id="next-chapter-2"><a class="header" href="#next-chapter-2">Next chapter</a></h2>
 <p>Chapter 3 writes the first real piece: turning <code>alpine</code>,
 <code>alpine:3.20</code>, <code>ghcr.io/foo/bar:v1</code>, and <code>alpine@sha256:...</code> into one
@@ -2320,24 +2418,62 @@ $ git add -A
 $ git commit -m "Parse image references"
 </code></pre>
 <h2 id="what-you-should-now-be-able-to-answer-3"><a class="header" href="#what-you-should-now-be-able-to-answer-3">What you should now be able to answer</a></h2>
-<ul>
-<li>What are the four parts of an image name, and which are optional?</li>
-<li>What three defaults does a bare <code>alpine</code> pick up?</li>
-<li>How do you tell a registry from the first part of a repository?</li>
-<li>Why is <code>Reference</code> a union of two interfaces instead of one interface
-with two optional fields?</li>
-<li>What does the <code>kind</code> field do, and what happens if you forget a
-<code>case</code>?</li>
-<li>Why does <code>localhost:5000/dev/app</code> have no tag?</li>
-<li>Why do <code>extractDigest</code> and <code>extractTag</code> both return the leftover
-string, and what broke when one of them didn’t?</li>
-<li>Why does <code>parseReference</code> need no <code>let</code> at all?</li>
-<li>Why does <code>parseReference</code> throw its own error class instead of a
-plain <code>Error</code>?</li>
-<li>Why is <code>expect(() =&gt; parseReference("")).toThrow(...)</code> wrapped
-in a function?</li>
-<li>Why did <code>argv.length !== 2</code> have to become a check on the values?</li>
-</ul>
+<p>Try to answer each one in your own words first. Then open the answer to check.</p>
+<p><strong>1. What are the four parts of an image name, and which are optional?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Registry, repository, tag, and digest (after <code>@</code>). Only the repository is required. The rest have defaults or can be left out.</p>
+</details>
+<p><strong>2. What three defaults does a bare <code>alpine</code> pick up?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Registry <code>docker.io</code>, the <code>library/</code> prefix (because it’s Docker Hub and the name has no <code>/</code>), and tag <code>latest</code>. So it becomes <code>docker.io/library/alpine:latest</code>.</p>
+</details>
+<p><strong>3. How do you tell a registry from the first part of a repository?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Look at the part before the first <code>/</code>. It’s a registry only if it is exactly <code>localhost</code>, or it contains a <code>.</code> (a hostname) or a <code>:</code> (a port). Otherwise it’s part of the repository, as in <code>rijojohn85/oci-pull</code>.</p>
+</details>
+<p><strong>4. Why is <code>Reference</code> a union of two interfaces instead of one interface with two optional fields?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>One interface with <code>tag?</code> and <code>digest?</code> would allow both to be missing, or both to be set. Every user of a <code>Reference</code> would then have to check for those nonsense cases. The union allows exactly one: tagged <em>or</em> digested. The impossible states can’t even be written.</p>
+</details>
+<p><strong>5. What does the <code>kind</code> field do, and what happens if you forget a <code>case</code>?</strong></p>
+<details>
+<summary>Answer</summary>
+<p><code>kind</code> is the field that says which shape you hold (<code>"tag"</code> or <code>"digest"</code>). A <code>switch</code> on it narrows the type, so each <code>case</code> can use that shape’s own field. Forget a <code>case</code> and the function fails to compile (“Function lacks ending return statement…”). The compiler finds the shape you forgot.</p>
+</details>
+<p><strong>6. Why does <code>localhost:5000/dev/app</code> have no tag?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>A <code>:</code> only starts a tag if it comes <em>after</em> the last <code>/</code>. Here the only colon comes before it, so it’s the port of the registry <code>localhost:5000</code>. With no tag given, the reference gets the default, <code>latest</code>.</p>
+</details>
+<p><strong>7. Why do <code>extractDigest</code> and <code>extractTag</code> both return the leftover string, and what broke when one of them didn’t?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Each step cuts a piece off the end, and the next step must work on what’s left. A function can’t change the caller’s string, so it has to hand the shorter string back. The first draft of <code>extractDigest</code> returned only the digest. <code>extractTag</code> then still saw <code>alpine@sha256:...</code>, took the hex after the last <code>:</code> as a tag, and left <code>alpine@sha256</code> as the repository. Every test with an <code>@</code> failed with “not a valid repository name”.</p>
+</details>
+<p><strong>8. Why does <code>parseReference</code> need no <code>let</code> at all?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Each step’s result gets its own <code>const</code> name (<code>restAfterDigest</code>, <code>restAfterTag</code>) instead of reusing one variable. Nothing is ever reassigned, so every name means one thing on every line.</p>
+</details>
+<p><strong>9. Why does <code>parseReference</code> throw its own error class instead of a plain <code>Error</code>?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>So callers can tell “the user typed a bad name” apart from every other failure with a single <code>instanceof</code> check. <code>main</code> prints the message and exits <code>1</code> for this one, and re-throws anything else. The class also keeps the bad <code>input</code> as a field, so nobody has to dig it out of the message.</p>
+</details>
+<p><strong>10. Why is <code>expect(() =&gt; parseReference("")).toThrow(...)</code> wrapped in a function?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Without the wrapper, <code>parseReference("")</code> would run, and throw, while the argument to <code>expect</code> is being worked out, before <code>expect</code> ever gets control. The test would crash instead of passing. Handing <code>expect</code> a function lets it call that function itself and catch the throw.</p>
+</details>
+<p><strong>11. Why did <code>argv.length !== 2</code> have to become a check on the values?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Because of <code>noUncheckedIndexedAccess</code>, <code>image</code> and <code>outputDir</code> are typed <code>string | undefined</code>, and checking the array’s length doesn’t change that for the compiler. Checking <code>image === undefined || outputDir === undefined</code> does: after that <code>if</code>, both are plain strings (narrowing).</p>
+</details>
 <h2 id="next-chapter-3"><a class="header" href="#next-chapter-3">Next chapter</a></h2>
 <p>Chapter 4 makes the first real HTTP call — to <code>/v2/</code>, the front door
 from Chapter 1, which answers <code>401</code> and tells us where to get a token.
@@ -3116,30 +3252,72 @@ $ git add -A
 $ git commit -m "Knock on the registry's front door"
 </code></pre>
 <h2 id="what-you-should-now-be-able-to-answer-4"><a class="header" href="#what-you-should-now-be-able-to-answer-4">What you should now be able to answer</a></h2>
-<ul>
-<li>What does <code>/v2/</code> answer on Docker Hub, and on Microsoft’s registry?
-What does each answer mean?</li>
-<li>Why does our code call <code>registry-1.docker.io</code> when the user typed
-<code>docker.io</code>?</li>
-<li>What’s wrong with a test that calls the real Docker Hub?</li>
-<li>Why does <code>RegistryClient</code> take an <code>HttpClient</code> in its constructor
-instead of calling <code>fetch</code>? What’s the name for that idea?</li>
-<li>Why does <code>HttpClient</code> have one method and not five?</li>
-<li>Why does <code>HttpClient.get</code> return the built-in <code>Response</code> instead of a
-type of our own?</li>
-<li>What’s the difference between a fake and a mock? What does
-<code>toHaveBeenCalledWith</code> check?</li>
-<li>What does <code>HttpClient["get"]</code> mean as a type?</li>
-<li>What do the angle brackets in <code>vi.fn&lt;HttpClient["get"]&gt;(...)</code> do,
-and what two things go wrong if you leave them off?</li>
-<li>Why does <code>headers.get</code> return <code>string | null</code>, and what makes
-<code>challenge</code> a plain <code>string</code> afterwards?</li>
-<li>How is testing a throw from an <code>async</code> function different from
-Chapter 3’s <code>toThrow</code>? What goes wrong without the <code>await</code>?</li>
-<li>Why did <code>cli.ts</code> stop compiling when <code>main</code> became <code>async</code>?</li>
-<li>Why does a network failure crash the program instead of printing a
-tidy message?</li>
-</ul>
+<p>Try to answer each one in your own words first. Then open the answer to check.</p>
+<p><strong>1. What does <code>/v2/</code> answer on Docker Hub, and on Microsoft’s registry? What does each answer mean?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Docker Hub answers <code>401</code> with a <code>www-authenticate</code> challenge: “not without a token, and here’s where to get one”. Microsoft’s registry answers <code>200</code>: “come in, no token needed for public images”.</p>
+</details>
+<p><strong>2. Why does our code call <code>registry-1.docker.io</code> when the user typed <code>docker.io</code>?</strong></p>
+<details>
+<summary>Answer</summary>
+<p><code>docker.io</code> is the name people <em>type</em>, but Docker Hub’s API lives on <code>registry-1.docker.io</code>. Asking <code>docker.io/v2/</code> gets a <code>302</code> redirect to Docker’s website. <code>apiHost</code> makes that one translation. Every other registry serves its API under its own name.</p>
+</details>
+<p><strong>3. What’s wrong with a test that calls the real Docker Hub?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>It needs the internet, it’s slow, and it fails when Docker Hub has a bad day even though your code didn’t change. It also can’t produce rare answers on demand, like a <code>401</code> with no challenge header.</p>
+</details>
+<p><strong>4. Why does <code>RegistryClient</code> take an <code>HttpClient</code> in its constructor instead of calling <code>fetch</code>? What’s the name for that idea?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>So the program can hand it the real client and a test can hand it a pretend one. <code>RegistryClient</code> can’t tell the difference. It depends on a description (the interface), not on one particular thing (<code>fetch</code>). That’s the <strong>dependency inversion principle</strong>, the “D” in SOLID.</p>
+</details>
+<p><strong>5. Why does <code>HttpClient</code> have one method and not five?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Because the registry code needs only “GET this URL”. A description should be as small as what its users really need, so fakes stay small too. That’s the “I” in SOLID, interface segregation: don’t ask for more than you use. It can grow when a real need appears, as it does in Chapter 5.</p>
+</details>
+<p><strong>6. Why does <code>HttpClient.get</code> return the built-in <code>Response</code> instead of a type of our own?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>The real client stays a one-liner (<code>return fetch(url)</code>). Tests can also build a reply with <code>new Response(...)</code>, which is the very class <code>fetch</code> returns, so the code under test can’t tell a fake reply from a real one.</p>
+</details>
+<p><strong>7. What’s the difference between a fake and a mock? What does <code>toHaveBeenCalledWith</code> check?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>A fake is a pretend version that answers whatever the test needs. A mock is a fake that also <em>takes notes</em>: it records every call and its arguments. <code>toHaveBeenCalledWith(x)</code> asks the mock “were you ever called with exactly these arguments?”, for example the right URL.</p>
+</details>
+<p><strong>8. What does <code>HttpClient["get"]</code> mean as a type?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>“The type of the <code>get</code> method on <code>HttpClient</code>”, so <code>(url: string) =&gt; Promise&lt;Response&gt;</code>. It uses the same square brackets as reading a field from an object, but applied to a type.</p>
+</details>
+<p><strong>9. What do the angle brackets in <code>vi.fn&lt;HttpClient["get"]&gt;(...)</code> do, and what two things go wrong if you leave them off?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>They fill in the blank of <code>vi.fn</code>: <em>which</em> function the mock pretends to be. Without them, <code>vi.fn</code> guesses from <code>async () =&gt; response</code> a function that takes no arguments. Then (1) its notes are typed as empty, so reading the URL from <code>get.mock.calls[0]</code> fails to compile (TS2493). And (2) a wrong pretend reply, like a string instead of a <code>Response</code>, isn’t caught on the line where you wrote it.</p>
+</details>
+<p><strong>10. Why does <code>headers.get</code> return <code>string | null</code>, and what makes <code>challenge</code> a plain <code>string</code> afterwards?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Because the header might not be in the reply, and <code>null</code> is how the built-in type says “not there”. The <code>if (challenge === null) { throw ... }</code> check narrows it: after that line, the compiler knows it’s a plain <code>string</code>.</p>
+</details>
+<p><strong>11. How is testing a throw from an <code>async</code> function different from Chapter 3’s <code>toThrow</code>? What goes wrong without the <code>await</code>?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>An <code>async</code> function doesn’t throw straight away. It returns a Promise that <em>rejects</em> (fails, holding the error) later. So you pass the Promise itself, use <code>.rejects.toThrow(...)</code>, and <code>await</code> the whole line. Without the <code>await</code>, the test function ends before the Promise fails, and the check never runs. Vitest now refuses this with “Promise returned by <code>expect(actual).rejects.toThrow(expected)</code> was not awaited”.</p>
+</details>
+<p><strong>12. Why did <code>cli.ts</code> stop compiling when <code>main</code> became <code>async</code>?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>An <code>async</code> function returns <code>Promise&lt;number&gt;</code>, a box the number will arrive in, and <code>process.exitCode</code> wants an actual number. The type check caught it (TS2322), which is the forgotten-<code>await</code> bug. The fix is <code>process.exitCode = await main(...)</code> at the top level of <code>cli.ts</code>.</p>
+</details>
+<p><strong>13. Why does a network failure crash the program instead of printing a tidy message?</strong></p>
+<details>
+<summary>Answer</summary>
+<p><code>fetch</code> threw its own <code>TypeError</code> (the cause was <code>ENOTFOUND</code>: no such host), and that isn’t one of <em>our</em> error classes. <code>main</code> re-throws errors it doesn’t understand rather than hiding them, as decided in Chapter 3. A friendly message for this case comes in Chapter 12.</p>
+</details>
 <h2 id="next-chapter-4"><a class="header" href="#next-chapter-4">Next chapter</a></h2>
 <p>Docker Hub said no, and told us where to ask. Chapter 5 reads that
 challenge (<code>realm</code>, <code>service</code>), asks <code>auth.docker.io</code> for a token, and
@@ -3704,7 +3882,7 @@ function challengeOf(url: string, response: Response): string {
 </blockquote>
 <p>Here it is:</p>
 <pre><code class="language-ts">    if (response.status === 401) {
-      return { kind: "needs-token", challenge: challengeOf(this.baseURL, response) }
+      return { kind: "needs-token", challenge: challengeOf(this.baseUrl, response) }
     }
 </code></pre>
 <p><code>checkApi</code> <em>decides</em> the same things it did before: <code>200</code> is open,
@@ -3725,14 +3903,14 @@ import { DEFAULT_REGISTRY } from "./reference.ts"
 export class RegistryClient {
   private readonly http: HttpClient
   private readonly auth: Authenticator
-  private readonly baseURL: string
+  private readonly baseUrl: string
   // No readonly: starts empty, set once the first token arrives.
   private token: string | undefined
 
   constructor(http: HttpClient, registry: string, auth: Authenticator) {
     this.http = http
     this.auth = auth
-    this.baseURL = `https://${apiHost(registry)}/v2/`
+    this.baseUrl = `https://${apiHost(registry)}/v2/`
   }
 </code></pre>
 <p><code>private token: string | undefined</code> with no <code>= ...</code> starts out as
@@ -3868,7 +4046,7 @@ and back could change them.</p>
 <p>And the method, inside the class above <code>authorizedGet</code>:</p>
 <pre><code class="language-ts">  // reference is a tag ("latest") or a digest ("sha256:...").
   async fetchManifest(repository: string, reference: string): Promise&lt;RawManifest&gt; {
-    const url = `${this.baseURL}${repository}/manifests/${reference}`
+    const url = `${this.baseUrl}${repository}/manifests/${reference}`
     // The scope asks for exactly one thing: pull access to this repository.
     const response = await this.authorizedGet(url, `repository:${repository}:pull`, {
       accept: MANIFEST_TYPES.join(", "),
@@ -4248,30 +4426,82 @@ $ git add -A
 $ git commit -m "Fetch a token and the manifest"
 </code></pre>
 <h2 id="what-you-should-now-be-able-to-answer-5"><a class="header" href="#what-you-should-now-be-able-to-answer-5">What you should now be able to answer</a></h2>
-<ul>
-<li>What three requests does it take to get a manifest from Docker Hub,
-and what does each one send and get back?</li>
-<li>What are <code>realm</code>, <code>service</code>, and <code>scope</code> in a challenge? Why do we
-build our own scope instead of using the challenge’s?</li>
-<li>Why did adding <code>headers?</code> to <code>HttpClient.get</code> break nothing, while
-adding <code>auth</code> to <code>RegistryClient</code>’s constructor broke six places?</li>
-<li>What’s the difference between a <code>Record&lt;string, string&gt;</code> and a
-<code>Map&lt;string, string&gt;</code>, and why do we use each where we do?</li>
-<li>Why is <code>Authenticator</code> an interface? What would adding password login
-change, and what would it leave alone? What’s the name of that idea?</li>
-<li>Why is <code>body</code> typed <code>unknown</code> and not left as <code>any</code>? What does each
-of the four checks do?</li>
-<li>Why build the token address with <code>URL</code> instead of a template string?</li>
-<li>What does <code>...</code> mean in <code>{ ...headers }</code>, and what does it mean in
-<code>(...responses: Response[])</code>?</li>
-<li>Why must a fake never give the same <code>Response</code> object to two calls?</li>
-<li>What does <code>mockResolvedValueOnce</code> do? Why does <code>replyingInTurn</code> have
-no default reply?</li>
-<li>What does <code>neverAuth</code> check, and why doesn’t it need to be a mock?</li>
-<li>Why does <code>objectContaining</code> make a test less likely to break for no
-reason?</li>
-<li>Why does a missing Docker Hub repository answer <code>401</code> and not <code>404</code>?</li>
-</ul>
+<p>Try to answer each one in your own words first. Then open the answer to check.</p>
+<p><strong>1. What three requests does it take to get a manifest from Docker Hub, and what does each one send and get back?</strong></p>
+<details>
+<summary>Answer</summary>
+<ol>
+<li><strong>GET the manifest</strong> with no token. You get back <code>401</code> plus a challenge naming <code>realm</code>, <code>service</code> and <code>scope</code>.</li>
+<li><strong>GET the token server</strong> (<code>realm</code>) with <code>?service=...&amp;scope=...</code>. You get back JSON holding <code>token</code> (plus <code>expires_in</code>: 300 seconds).</li>
+<li><strong>GET the manifest again</strong>, with <code>Authorization: Bearer &lt;token&gt;</code> and an <code>Accept</code> list of formats. You get back <code>200</code>, the manifest bytes, and the <code>content-type</code> and <code>docker-content-digest</code> headers.</li>
+</ol>
+</details>
+<p><strong>2. What are <code>realm</code>, <code>service</code>, and <code>scope</code> in a challenge? Why do we build our own scope instead of using the challenge’s?</strong></p>
+<details>
+<summary>Answer</summary>
+<p><code>realm</code> is the token server’s address. <code>service</code> says which registry the token is for. <code>scope</code> is the permission being asked for, like <code>repository:library/alpine:pull</code>. We build our own because we already know which repository we want, while challenges can’t be trusted to name it: the front door sends no scope at all, and GitHub’s sends the placeholder <code>repository:user/image:pull</code>.</p>
+</details>
+<p><strong>3. Why did adding <code>headers?</code> to <code>HttpClient.get</code> break nothing, while adding <code>auth</code> to <code>RegistryClient</code>’s constructor broke six places?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>The <code>?</code> made <code>headers</code> <em>optional</em>: every existing one-argument call stayed valid, the fakes still had the right shape, and even <code>toHaveBeenCalledWith(url)</code> still matched. <code>auth</code> is <em>required</em>, so every existing <code>new RegistryClient(http, registry)</code> (five in tests, one in <code>main</code>) was now missing an argument. The compiler listed each one.</p>
+</details>
+<p><strong>4. What’s the difference between a <code>Record&lt;string, string&gt;</code> and a <code>Map&lt;string, string&gt;</code>, and why do we use each where we do?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>A <code>Record&lt;string, string&gt;</code> is a plain object used as a lookup table. It’s what <code>fetch</code> expects for headers, so <code>RequestHeaders</code> is one. A <code>Map</code> is a real lookup table with <code>get</code>/<code>set</code>, whose <code>get</code> clearly returns <code>undefined</code> for a missing key. Inside <code>parseChallenge</code>, nobody outside sees the table, so the clearer <code>Map</code> is used.</p>
+</details>
+<p><strong>5. Why is <code>Authenticator</code> an interface? What would adding password login change, and what would it leave alone? What’s the name of that idea?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>So the <em>way</em> a token is fetched can change without touching the code that decides <em>when</em> one is needed. Password login means writing a new class, <code>PasswordAuthenticator implements Authenticator</code>, and choosing it in <code>main</code>. <code>RegistryClient</code> and <code>AnonymousAuthenticator</code> stay untouched. That’s the <strong>open/closed principle</strong>, the “O” in SOLID: open to new behavior, closed to rewrites.</p>
+</details>
+<p><strong>6. Why is <code>body</code> typed <code>unknown</code> and not left as <code>any</code>? What does each of the four checks do?</strong></p>
+<details>
+<summary>Answer</summary>
+<p><code>response.json()</code> is typed <code>any</code>. Kept as <code>any</code>, <code>return body.token</code> would compile with no checks, and a reply without a token would pass <code>undefined</code> along typed as a <code>string</code>. <code>unknown</code> forces the checks:</p>
+<ol>
+<li><code>typeof body !== "object"</code> rules out strings, numbers and so on.</li>
+<li><code>body === null</code> is needed because <code>typeof null</code> is <code>"object"</code>.</li>
+<li><code>"token" in body</code> checks that the field exists.</li>
+<li><code>typeof body.token !== "string"</code> makes sure it’s text.</li>
+</ol>
+</details>
+<p><strong>7. Why build the token address with <code>URL</code> instead of a template string?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>The scope contains <code>:</code> and <code>/</code>, which have special meanings in an address. <code>searchParams.set</code> escapes them (<code>%3A</code>, <code>%2F</code>) for us. <code>URL</code> also copes with a <code>realm</code> that already has a <code>?</code> in it.</p>
+</details>
+<p><strong>8. What does <code>...</code> mean in <code>{ ...headers }</code>, and what does it mean in <code>(...responses: Response[])</code>?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>In <code>{ ...headers }</code> it <em>spreads</em>: it copies every field of <code>headers</code> into a new object (like Python’s <code>{**headers}</code>). In a parameter list it <em>gathers</em>: all the arguments are collected into one array (like Python’s <code>*args</code> or Go’s <code>...Response</code>).</p>
+</details>
+<p><strong>9. Why must a fake never give the same <code>Response</code> object to two calls?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>A <code>Response</code>’s body can be read only once. A second read fails with “Body is unusable: Body has already been read”. So helpers like <code>unauthorized()</code> and <code>manifest()</code> build a fresh reply every time they’re called.</p>
+</details>
+<p><strong>10. What does <code>mockResolvedValueOnce</code> do? Why does <code>replyingInTurn</code> have no default reply?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>It queues one reply for the next call that hasn’t been answered yet, so calls get their replies in order. There’s no default, so an unexpected extra call gets <code>undefined</code>. The code then crashes on the very next line and the test points straight at it, instead of quietly receiving a made-up answer.</p>
+</details>
+<p><strong>11. What does <code>neverAuth</code> check, and why doesn’t it need to be a mock?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>It checks that the code under test never asks for a token (as with <code>checkApi</code>, or an open registry), because it throws if called. It records nothing, because there’s nothing to inspect afterwards: being called at all is already the failure.</p>
+</details>
+<p><strong>12. Why does <code>objectContaining</code> make a test less likely to break for no reason?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>It checks only the fields you list (here <code>authorization</code>) and ignores the rest (like <code>accept</code>). If an unrelated header changes later, the test still passes, because it checks only what it’s actually about.</p>
+</details>
+<p><strong>13. Why does a missing Docker Hub repository answer <code>401</code> and not <code>404</code>?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>If Docker Hub told strangers “no such repository”, anyone could find out whether a <em>private</em> repository exists by asking. So it gives the same answer for “doesn’t exist” and “not yours”: the token doesn’t grant access, and the retry gets <code>401</code> again.</p>
+</details>
 <h2 id="next-chapter-5"><a class="header" href="#next-chapter-5">Next chapter</a></h2>
 <p>We have the manifest’s bytes but haven’t looked inside. Chapter 6
 reads them, and the lesson is to trust nothing the server sends.

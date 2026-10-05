@@ -655,7 +655,7 @@ Here it is:
 
 ```ts
     if (response.status === 401) {
-      return { kind: "needs-token", challenge: challengeOf(this.baseURL, response) }
+      return { kind: "needs-token", challenge: challengeOf(this.baseUrl, response) }
     }
 ```
 
@@ -681,14 +681,14 @@ import { DEFAULT_REGISTRY } from "./reference.ts"
 export class RegistryClient {
   private readonly http: HttpClient
   private readonly auth: Authenticator
-  private readonly baseURL: string
+  private readonly baseUrl: string
   // No readonly: starts empty, set once the first token arrives.
   private token: string | undefined
 
   constructor(http: HttpClient, registry: string, auth: Authenticator) {
     this.http = http
     this.auth = auth
-    this.baseURL = `https://${apiHost(registry)}/v2/`
+    this.baseUrl = `https://${apiHost(registry)}/v2/`
   }
 ```
 
@@ -855,7 +855,7 @@ And the method, inside the class above `authorizedGet`:
 ```ts
   // reference is a tag ("latest") or a digest ("sha256:...").
   async fetchManifest(repository: string, reference: string): Promise<RawManifest> {
-    const url = `${this.baseURL}${repository}/manifests/${reference}`
+    const url = `${this.baseUrl}${repository}/manifests/${reference}`
     // The scope asks for exactly one thing: pull access to this repository.
     const response = await this.authorizedGet(url, `repository:${repository}:pull`, {
       accept: MANIFEST_TYPES.join(", "),
@@ -1320,28 +1320,130 @@ $ git commit -m "Fetch a token and the manifest"
 
 ## What you should now be able to answer
 
-- What three requests does it take to get a manifest from Docker Hub,
-  and what does each one send and get back?
-- What are `realm`, `service`, and `scope` in a challenge? Why do we
-  build our own scope instead of using the challenge's?
-- Why did adding `headers?` to `HttpClient.get` break nothing, while
-  adding `auth` to `RegistryClient`'s constructor broke six places?
-- What's the difference between a `Record<string, string>` and a
-  `Map<string, string>`, and why do we use each where we do?
-- Why is `Authenticator` an interface? What would adding password login
-  change, and what would it leave alone? What's the name of that idea?
-- Why is `body` typed `unknown` and not left as `any`? What does each
-  of the four checks do?
-- Why build the token address with `URL` instead of a template string?
-- What does `...` mean in `{ ...headers }`, and what does it mean in
-  `(...responses: Response[])`?
-- Why must a fake never give the same `Response` object to two calls?
-- What does `mockResolvedValueOnce` do? Why does `replyingInTurn` have
-  no default reply?
-- What does `neverAuth` check, and why doesn't it need to be a mock?
-- Why does `objectContaining` make a test less likely to break for no
-  reason?
-- Why does a missing Docker Hub repository answer `401` and not `404`?
+Try to answer each one in your own words first. Then open the answer to check.
+
+**1. What three requests does it take to get a manifest from Docker Hub, and what does each one send and get back?**
+
+<details>
+<summary>Answer</summary>
+
+1. **GET the manifest** with no token. You get back `401` plus a challenge naming `realm`, `service` and `scope`.
+2. **GET the token server** (`realm`) with `?service=...&scope=...`. You get back JSON holding `token` (plus `expires_in`: 300 seconds).
+3. **GET the manifest again**, with `Authorization: Bearer <token>` and an `Accept` list of formats. You get back `200`, the manifest bytes, and the `content-type` and `docker-content-digest` headers.
+
+</details>
+
+**2. What are `realm`, `service`, and `scope` in a challenge? Why do we build our own scope instead of using the challenge's?**
+
+<details>
+<summary>Answer</summary>
+
+`realm` is the token server's address. `service` says which registry the token is for. `scope` is the permission being asked for, like `repository:library/alpine:pull`. We build our own because we already know which repository we want, while challenges can't be trusted to name it: the front door sends no scope at all, and GitHub's sends the placeholder `repository:user/image:pull`.
+
+</details>
+
+**3. Why did adding `headers?` to `HttpClient.get` break nothing, while adding `auth` to `RegistryClient`'s constructor broke six places?**
+
+<details>
+<summary>Answer</summary>
+
+The `?` made `headers` *optional*: every existing one-argument call stayed valid, the fakes still had the right shape, and even `toHaveBeenCalledWith(url)` still matched. `auth` is *required*, so every existing `new RegistryClient(http, registry)` (five in tests, one in `main`) was now missing an argument. The compiler listed each one.
+
+</details>
+
+**4. What's the difference between a `Record<string, string>` and a `Map<string, string>`, and why do we use each where we do?**
+
+<details>
+<summary>Answer</summary>
+
+A `Record<string, string>` is a plain object used as a lookup table. It's what `fetch` expects for headers, so `RequestHeaders` is one. A `Map` is a real lookup table with `get`/`set`, whose `get` clearly returns `undefined` for a missing key. Inside `parseChallenge`, nobody outside sees the table, so the clearer `Map` is used.
+
+</details>
+
+**5. Why is `Authenticator` an interface? What would adding password login change, and what would it leave alone? What's the name of that idea?**
+
+<details>
+<summary>Answer</summary>
+
+So the *way* a token is fetched can change without touching the code that decides *when* one is needed. Password login means writing a new class, `PasswordAuthenticator implements Authenticator`, and choosing it in `main`. `RegistryClient` and `AnonymousAuthenticator` stay untouched. That's the **open/closed principle**, the "O" in SOLID: open to new behavior, closed to rewrites.
+
+</details>
+
+**6. Why is `body` typed `unknown` and not left as `any`? What does each of the four checks do?**
+
+<details>
+<summary>Answer</summary>
+
+`response.json()` is typed `any`. Kept as `any`, `return body.token` would compile with no checks, and a reply without a token would pass `undefined` along typed as a `string`. `unknown` forces the checks:
+1. `typeof body !== "object"` rules out strings, numbers and so on.
+2. `body === null` is needed because `typeof null` is `"object"`.
+3. `"token" in body` checks that the field exists.
+4. `typeof body.token !== "string"` makes sure it's text.
+
+</details>
+
+**7. Why build the token address with `URL` instead of a template string?**
+
+<details>
+<summary>Answer</summary>
+
+The scope contains `:` and `/`, which have special meanings in an address. `searchParams.set` escapes them (`%3A`, `%2F`) for us. `URL` also copes with a `realm` that already has a `?` in it.
+
+</details>
+
+**8. What does `...` mean in `{ ...headers }`, and what does it mean in `(...responses: Response[])`?**
+
+<details>
+<summary>Answer</summary>
+
+In `{ ...headers }` it *spreads*: it copies every field of `headers` into a new object (like Python's `{**headers}`). In a parameter list it *gathers*: all the arguments are collected into one array (like Python's `*args` or Go's `...Response`).
+
+</details>
+
+**9. Why must a fake never give the same `Response` object to two calls?**
+
+<details>
+<summary>Answer</summary>
+
+A `Response`'s body can be read only once. A second read fails with "Body is unusable: Body has already been read". So helpers like `unauthorized()` and `manifest()` build a fresh reply every time they're called.
+
+</details>
+
+**10. What does `mockResolvedValueOnce` do? Why does `replyingInTurn` have no default reply?**
+
+<details>
+<summary>Answer</summary>
+
+It queues one reply for the next call that hasn't been answered yet, so calls get their replies in order. There's no default, so an unexpected extra call gets `undefined`. The code then crashes on the very next line and the test points straight at it, instead of quietly receiving a made-up answer.
+
+</details>
+
+**11. What does `neverAuth` check, and why doesn't it need to be a mock?**
+
+<details>
+<summary>Answer</summary>
+
+It checks that the code under test never asks for a token (as with `checkApi`, or an open registry), because it throws if called. It records nothing, because there's nothing to inspect afterwards: being called at all is already the failure.
+
+</details>
+
+**12. Why does `objectContaining` make a test less likely to break for no reason?**
+
+<details>
+<summary>Answer</summary>
+
+It checks only the fields you list (here `authorization`) and ignores the rest (like `accept`). If an unrelated header changes later, the test still passes, because it checks only what it's actually about.
+
+</details>
+
+**13. Why does a missing Docker Hub repository answer `401` and not `404`?**
+
+<details>
+<summary>Answer</summary>
+
+If Docker Hub told strangers "no such repository", anyone could find out whether a *private* repository exists by asking. So it gives the same answer for "doesn't exist" and "not yours": the token doesn't grant access, and the retry gets `401` again.
+
+</details>
 
 ## Next chapter
 

@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-97d040ea.js";
+            window.path_to_searchindex_js = "searchindex-c5e56785.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-b48846b6.js"></script>
@@ -556,16 +556,42 @@ updates it whenever you add or upgrade something.</p>
     └── main.test.ts
 </code></pre>
 <h2 id="what-you-should-now-be-able-to-answer"><a class="header" href="#what-you-should-now-be-able-to-answer">What you should now be able to answer</a></h2>
-<ul>
-<li>Which of Node, <code>tsc</code>, and Vitest checks types? Which ones run code?</li>
-<li>Why does <code>npm run check</code> have to run two commands?</li>
-<li>What does <code>"type": "module"</code> in <code>package.json</code> change?</li>
-<li>Why do imports in this project end in <code>.ts</code>, and what setting allows
-that?</li>
-<li>Why is <code>cli.ts</code> a separate file from <code>main.ts</code>?</li>
-<li>Why does <code>main</code> return a number instead of calling <code>process.exit</code>?</li>
-<li>What does <code>--save-dev</code> mean, and why pin <code>@types/node</code> to <code>22</code>?</li>
-</ul>
+<p>Try to answer each one in your own words first. Then open the answer to check.</p>
+<p><strong>1. Which of Node, <code>tsc</code>, and Vitest checks types? Which ones run code?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Only <code>tsc</code> checks types. Node and Vitest <em>run</em> code, and they do it by deleting the type labels first. They never check them. (<code>tsc</code> can also build <code>.js</code> files, which Chapter 12 uses.)</p>
+</details>
+<p><strong>2. Why does <code>npm run check</code> have to run two commands?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Because neither one is enough alone. The tests (Vitest) prove the code <em>does</em> the right thing but ignore types: the <code>oops.test.ts</code> with a wrong type still passed. The type check (<code>tsc</code>) proves the types are true but runs nothing. <code>check</code> runs both.</p>
+</details>
+<p><strong>3. What does <code>"type": "module"</code> in <code>package.json</code> change?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>It tells Node to treat every file in the project as a modern module, using <code>import</code>/<code>export</code> instead of the older <code>require()</code>. (It’s also what allows <code>await</code> at the top level of a file, used in Chapter 4.)</p>
+</details>
+<p><strong>4. Why do imports in this project end in <code>.ts</code>, and what setting allows that?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Node runs the <code>.ts</code> files directly, with no build step, so an import must name the real file, <code>./main.ts</code>. The <code>rewriteRelativeImportExtensions</code> setting allows writing <code>.ts</code> there. When Chapter 12 builds real <code>.js</code>, it rewrites the imports to <code>./main.js</code>.</p>
+</details>
+<p><strong>5. Why is <code>cli.ts</code> a separate file from <code>main.ts</code>?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Importing a file must never <em>run the program</em>. Tests import <code>main.ts</code>. If it called <code>main(...)</code> itself, every test would start a pull. So <code>main.ts</code> only defines things, and <code>cli.ts</code> is the one file that kicks the program off. One file, one job (single responsibility).</p>
+</details>
+<p><strong>6. Why does <code>main</code> return a number instead of calling <code>process.exit</code>?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>A function that returns a value is easy to test: call it and check the number. A function that ends the process would end the test run too. <code>cli.ts</code> puts the returned number into <code>process.exitCode</code>, and Node exits with it after finishing normally.</p>
+</details>
+<p><strong>7. What does <code>--save-dev</code> mean, and why pin <code>@types/node</code> to <code>22</code>?</strong></p>
+<details>
+<summary>Answer</summary>
+<p><code>--save-dev</code> marks a package as needed to <em>develop</em> the project (compiler, test runner, type definitions), not to run it. It goes under <code>devDependencies</code>. <code>@types/node@22</code> describes Node’s built-in functions. Pinning it to the same major version as the Node you run means the types describe the functions you actually have.</p>
+</details>
 <h2 id="next-chapter"><a class="header" href="#next-chapter">Next chapter</a></h2>
 <p>Chapter 2.5 is a short primer, slower on purpose, for readers coming
 from Go and Python: how TypeScript’s idea of a type differs from both
