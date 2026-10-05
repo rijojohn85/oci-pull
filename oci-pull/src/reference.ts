@@ -80,7 +80,7 @@ function splitRegistry(name: string): [registry: string, repository: string] {
 /** Regex for valid tags: start with word char, 1-128 chars total, alphanumeric with dots/hyphens. */
 const TAG_PATTERN = /^[\w][\w.-]{0,127}$/
 /** Regex for valid digests: algorithm:hash format (e.g., "sha256:abc123..."). */
-const DIGEST_PATTERN = /^[a-z0-9]+(?:[.+_-][a-z0-9]+)*:[0-9a-fA-F]{32,}$/
+export const DIGEST_PATTERN = /^[a-z0-9]+(?:[.+_-][a-z0-9]+)*:[0-9a-fA-F]{32,}$/
 /** Regex for valid repository names: lowercase alphanumeric with optional separators and path segments. */
 const REPOSITORY_PATTERN =
   /^[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*(?:\/[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*)*$/
@@ -191,3 +191,4 @@ export function target(ref: Reference): string {
       return ref.digest
   }
 }
+

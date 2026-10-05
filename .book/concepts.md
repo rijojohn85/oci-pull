@@ -9,9 +9,9 @@
 | Shape typing (a type is a shape) | Ch2.5 §1 | Ch4 `{ get }` as HttpClient, Ch5 `neverAuth` |
 | `undefined`/`null`, `?.`, `??` | Ch2.5 §3, Ch3 | Ch5 `?? {}`, `?? ""`, `?? "(not sent)"` |
 | `===` | Ch2.5 §3 | throughout |
-| Union / tagged one-of type + `switch` with no default | Ch3 (`Reference`, `target`) | Ch4 `ApiCheck`, `describeApiCheck` |
+| Union / tagged one-of type + `switch` with no default | Ch3 (`Reference`, `target`) | Ch4 `ApiCheck`, `describeApiCheck`, Ch6 `Manifest` |
 | `interface`, `extends`, `readonly` | Ch3 | Ch5 `Challenge`, `RawManifest` |
-| Own error class (`extends Error`, `name`) | Ch3 `InvalidReferenceError` | Ch4 `RegistryError`, Ch5 `AuthError` |
+| Own error class (`extends Error`, `name`) | Ch3 `InvalidReferenceError` | Ch4 `RegistryError`, Ch5 `AuthError`, Ch6 `ManifestError` |
 | Named constants instead of magic values | Ch3 (`DEFAULT_TAG` ...) | Ch4 `DOCKER_HUB_API_HOST`, Ch5 `MANIFEST_TYPES` |
 | Vitest `describe`/`it`/`expect`, `toEqual`, `toThrow` | Ch2/Ch3 | every chapter |
 | `it.each` with a table of rows | Ch3 | Ch4 registries, Ch5 parseChallenge |
@@ -28,15 +28,32 @@
 | `Record<K, V>`, optional parameter `?`, default parameter value | Ch5 Step 1 | — |
 | Regex literal, named groups, `matchAll` | Ch5 Step 2 | — |
 | `Map` | Ch5 Step 2 | — |
-| `unknown` + hand narrowing (`typeof`, `in`) | Ch2.5, code in Ch5 Step 3 | (Ch6 replaces with zod) |
+| `unknown` + hand narrowing (`typeof`, `in`) | Ch2.5, code in Ch5 Step 3 | Ch6 `parseJson(): unknown` (then zod) |
 | `URL` / `searchParams` | Ch5 Step 3 | — |
 | Open/closed principle (O) | Ch5 Step 3 `Authenticator` | — |
-| DRY: move shared helper to its own file | Ch5 Step 4 `fake-http.ts` | Ch5 `challengeOf` (explain → Your turn) |
+| DRY: move shared helper to its own file | Ch5 Step 4 `fake-http.ts` | Ch5 `challengeOf`; Ch6 `test-manifests.ts` (shown, fixtures), `DIGEST_PATTERN` export, `MANIFEST_TYPES` from lists |
 | `Response.json(value)` | Ch5 Step 4 | Ch5 end-to-end test |
 | Object spread `{ ...obj }` | Ch5 Step 5 | — |
 | `Uint8Array` / `arrayBuffer()` | Ch5 Step 5 | — |
 | Rest parameter `...args: T[]` | Ch5 Step 6 | — |
-| `mockResolvedValueOnce` / fake answering in turn | Ch5 Step 6 | — |
+| `mockResolvedValueOnce` / fake answering in turn | Ch5 Step 6 | Ch6 resolve test 2 (chained on vi.fn) |
 | `toHaveBeenCalledTimes`, `toHaveBeenNthCalledWith`, `toHaveBeenLastCalledWith`, `expect.objectContaining` | Ch5 Step 6 | — |
 | A fake that fails if called (`neverAuth`) | Ch5 Step 5 | — |
 | `array.join("\n")` | Ch5 Step 7 | — |
+| `TextEncoder` / `TextDecoder` | Ch6 Step 1 | — |
+| zod: `import * as z`, `z.object/string/number/array`, `safeParse`, `prettifyError` | Ch6 Step 2 (try-zod) | Ch6 Step 3 schemas |
+| zod: `.regex(p, msg)`, `.int().nonnegative()`, `.optional()`, `.extend()`, `z.literal` | Ch6 Step 3 | `ImageManifestSchema` Your turn |
+| `z.infer<typeof Schema>` (type from schema), unknown keys stripped | Ch6 Step 3 / Step 5 | — |
+| `catch {` with no variable | Ch6 Step 4 `parseJson` | — |
+| `readonly string[]` + `includes` | Ch6 Step 4 | — |
+| Array spread `[...a, ...b]` | Ch6 Step 4 `MANIFEST_TYPES` | Ch6 `[...new Set()]`, `...layerLines` |
+| safeParse branch (check success → data) | Ch6 Step 4 index branch | image branch Your turn |
+| Object spread to build broken test data `{ ...good, field }` | Ch6 Step 5 | — |
+| Regex in `toThrow(/.../)` | Ch6 Step 5 | — |
+| Arrow functions + `find` / `map` / `filter` (filter narrows undefined away) | Ch6 Step 6 | Ch6 `layers.map((layer, i) => ...)` |
+| `Set` | Ch6 Step 6 | — |
+| Default parameter used to inject the environment (`arch = process.arch`) | Ch6 Step 6 `hostPlatform` | — |
+| Interface segregation (I in SOLID): narrow `ManifestSource` | Ch6 Step 7 | — |
+| `toHaveLength` | Ch6 Step 7 | — |
+| Destructuring an object `const { a, b } = obj` | Ch6 Step 8 (comment) | — |
+| Numeric separator `1_000_000`, `toFixed` | Ch6 Step 8 | — |

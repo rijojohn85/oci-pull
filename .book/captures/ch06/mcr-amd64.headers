@@ -1,0 +1,22 @@
+HTTP/2 200 
+content-length: 528
+content-type: application/vnd.docker.distribution.manifest.v2+json
+etag: "sha256:8e53e07b6a3887d814c4d6f75038f16daf9f549216a57b0824b64f51fd25fb13"
+access-control-expose-headers: Docker-Content-Digest
+access-control-expose-headers: WWW-Authenticate
+access-control-expose-headers: Link
+access-control-expose-headers: X-Ms-Correlation-Request-Id
+docker-content-digest: sha256:8e53e07b6a3887d814c4d6f75038f16daf9f549216a57b0824b64f51fd25fb13
+docker-distribution-api-version: registry/2.0
+strict-transport-security: max-age=31536000; includeSubDomains
+x-content-type-options: nosniff
+x-ms-client-request-id: 
+x-ms-correlation-request-id: 38b16336-0030-45f2-9dc5-a0735cc06163
+x-ms-request-id: 9487f7b1-d764-4470-b747-c1f87985f611
+strict-transport-security: max-age=31536000; includeSubDomains
+x-cache: CONFIG_NOCACHE
+x-mcr-env: prod
+x-mcr-privacy: https://privacy.microsoft.com/en-us/privacystatement
+x-msedge-ref: Ref A: 45D49896199448DABE48D127FAD3D500 Ref B: MAA211070114040 Ref C: 2026-10-05T07:29:43Z
+date: Mon, 05 Oct 2026 07:29:42 GMT
+

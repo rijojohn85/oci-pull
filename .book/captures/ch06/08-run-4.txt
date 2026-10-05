@@ -1,0 +1,12 @@
+$ npm start --silent -- alpine@sha256:c64c687cbea9300178b30c95835354e34c4e4febc4badfe27102879de0483b5e ./rootfs
+# state: Ch6 final code, real network, x64 machine
+registry   docker.io
+repository library/alpine
+digest     sha256:c64c687cbea9300178b30c95835354e34c4e4febc4badfe27102879de0483b5e
+api        needs a token
+challenge  Bearer realm="https://auth.docker.io/token",service="registry.docker.io"
+platform   linux/amd64
+manifest   sha256:c64c687cbea9300178b30c95835354e34c4e4febc4badfe27102879de0483b5e
+config     sha256:bf8527eb54c3680e728d5b4b383a8ba730d72dae7236fbc8dff97ed6b224a731
+layer 1/1  sha256:25f1d6b1951ac8eb3740558fe94cb83d377bdadf95fd9f98b50d2e1b96130471  3.6 MB
+would pull into ./rootfs

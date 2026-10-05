@@ -1,0 +1,9 @@
+$ npm install zod
+# state: Ch5 code
+
+added 3 packages, and audited 45 packages in 829ms
+
+14 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities

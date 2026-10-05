@@ -1,0 +1,1 @@
+node:22-alpine layer sizes [3849738, 55585204, 1262001, 447]; config history: ADD alpine-minirootfs-3.24.2, RUN addgroup..node, RUN apk yarn, COPY docker-entrypoint.sh

@@ -1,0 +1,23 @@
+$ npm run check
+# state: Ch6 final code
+
+> oci-pull@1.0.0 check
+> npm run typecheck && npm run test
+
+
+> oci-pull@1.0.0 typecheck
+> tsc --noEmit
+
+
+> oci-pull@1.0.0 test
+> vitest run
+
+
+ RUN  v5.0.1 /home/rijojohn/csi-driver/oci-pull-book/.book/scratch/oci-pull
+
+
+ Test Files  6 passed (6)
+      Tests  53 passed (53)
+   Start at  13:05:20
+   Duration  270ms (import 48%, transform 32%, tests 16%, worker 3%)
+

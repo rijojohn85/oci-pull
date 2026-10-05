@@ -1,0 +1,3 @@
+$ npx tsc --noEmit
+# state: try-zod.ts with result.data.layrs typo
+src/try-zod.ts(15,38): error TS2551: Property 'layrs' does not exist on type '{ schemaVersion: number; layers: { digest: string; }[]; }'. Did you mean 'layers'?

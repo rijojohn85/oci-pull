@@ -1,0 +1,23 @@
+$ npm run check
+# state: Step 4 before registry DRY: manifest.ts with parseManifest; registry = Ch5
+
+> oci-pull@1.0.0 check
+> npm run typecheck && npm run test
+
+
+> oci-pull@1.0.0 typecheck
+> tsc --noEmit
+
+
+> oci-pull@1.0.0 test
+> vitest run
+
+
+ RUN  v5.0.1 /tmp/claude-1000/-home-rijojohn-csi-driver/03863128-cbfb-4b66-806f-4e858c79bedd/scratchpad/step5/oci-pull
+
+
+ Test Files  4 passed (4)
+      Tests  36 passed (36)
+   Start at  13:07:04
+   Duration  194ms (transform 46%, tests 26%, import 21%, worker 6%)
+

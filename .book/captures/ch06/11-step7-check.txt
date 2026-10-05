@@ -1,0 +1,23 @@
+$ npm run check
+# state: end of Step 7: + resolve.ts and tests; main.ts = Ch5
+
+> oci-pull@1.0.0 check
+> npm run typecheck && npm run test
+
+
+> oci-pull@1.0.0 typecheck
+> tsc --noEmit
+
+
+> oci-pull@1.0.0 test
+> vitest run
+
+
+ RUN  v5.0.1 /tmp/claude-1000/-home-rijojohn-csi-driver/03863128-cbfb-4b66-806f-4e858c79bedd/scratchpad/step5/oci-pull
+
+
+ Test Files  6 passed (6)
+      Tests  53 passed (53)
+   Start at  13:06:51
+   Duration  276ms (import 43%, transform 32%, tests 21%, worker 4%)
+

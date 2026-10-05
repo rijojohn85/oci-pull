@@ -1,5 +1,6 @@
 import { parseChallenge, type Authenticator } from "./auth.ts"
 import type { HttpClient, RequestHeaders } from "./http.ts"
+import { IMAGE_TYPES, INDEX_TYPES } from "./manifest.ts"
 import { DEFAULT_REGISTRY } from "./reference.ts"
 
 const DOCKER_HUB_API_HOST = "registry-1.docker.io"
@@ -7,10 +8,7 @@ const DOCKER_HUB_API_HOST = "registry-1.docker.io"
 // The manifest formats we can read, sent in the Accept header.
 // Chapter 6 explains the four; for now, "any of these, please".
 const MANIFEST_TYPES = [
-  "application/vnd.oci.image.index.v1+json",
-  "application/vnd.oci.image.manifest.v1+json",
-  "application/vnd.docker.distribution.manifest.list.v2+json",
-  "application/vnd.docker.distribution.manifest.v2+json",
+  ...IMAGE_TYPES, ...INDEX_TYPES,
 ]
 
 export type ApiCheck = { kind: "open" } | { kind: "needs-token", challenge: string }

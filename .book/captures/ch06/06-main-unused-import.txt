@@ -1,0 +1,11 @@
+$ npm run check
+# state: main.ts uses describeImage/resolveImage (const resolved); RawManifest import still there; ManifestError not yet in catch
+
+> oci-pull@1.0.0 check
+> npm run typecheck && npm run test
+
+
+> oci-pull@1.0.0 typecheck
+> tsc --noEmit
+
+src/main.ts(5,30): error TS6133: 'RawManifest' is declared but its value is never read.

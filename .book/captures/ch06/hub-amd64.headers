@@ -1,0 +1,14 @@
+HTTP/2 200 
+date: Mon, 05 Oct 2026 07:29:24 GMT
+content-type: application/vnd.oci.image.manifest.v1+json
+content-length: 1023
+docker-content-digest: sha256:c64c687cbea9300178b30c95835354e34c4e4febc4badfe27102879de0483b5e
+docker-distribution-api-version: registry/2.0
+etag: "sha256:c64c687cbea9300178b30c95835354e34c4e4febc4badfe27102879de0483b5e"
+docker-ratelimit-source: 49.43.245.146
+x-ratelimit-limit: 100;w=3600
+ratelimit-limit: 100;w=3600
+x-ratelimit-remaining: 98;w=3600
+ratelimit-remaining: 98;w=3600
+strict-transport-security: max-age=31536000
+

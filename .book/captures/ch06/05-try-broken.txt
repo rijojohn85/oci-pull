@@ -1,0 +1,7 @@
+$ node src/try-broken.ts
+# state: manifest.ts (regex with "not a digest") + test-manifests.ts; throwaway try-broken.ts
+ManifestError: manifest: not a valid application/vnd.oci.image.manifest.v1+json
+✖ not a digest
+  → at config.digest
+✖ Invalid input: expected number, received string
+  → at layers[0].size

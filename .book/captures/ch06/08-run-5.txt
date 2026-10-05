@@ -1,0 +1,15 @@
+$ npm start --silent -- node:22-alpine ./rootfs
+# state: Ch6 final code, real network, x64 machine
+registry   docker.io
+repository library/node
+tag        22-alpine
+api        needs a token
+challenge  Bearer realm="https://auth.docker.io/token",service="registry.docker.io"
+platform   linux/amd64
+manifest   sha256:2c752226d477b4a886378baa95b9af252be59301b725fdb0b7e15208131505a8
+config     sha256:7c3b093add7c43400ee83b815ab2cda98794a10045bcf76ce9bb2f89b97cbc5c
+layer 1/4  sha256:e2de96513ba9eb53b431787ec8a65cdde380ac4772a3e4c4b714dcfde2a102b5  3.8 MB
+layer 2/4  sha256:f7f2d304681aaa935c9cfd180850cf616ae843efce7682873d6521ded7268937  55.6 MB
+layer 3/4  sha256:e554276b05e6306c5ad33cd85bfa7f0693083e21f6114db5abf60a20fb413039  1.3 MB
+layer 4/4  sha256:d39db1cf9caa4f49c5a2e67111fbe6e0d5eea8ede550cb82f3dc2b79712688d6  0.0 MB
+would pull into ./rootfs

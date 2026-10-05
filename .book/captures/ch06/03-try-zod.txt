@@ -1,0 +1,4 @@
+$ node src/try-zod.ts
+# state: Ch5 + zod installed + src/try-zod.ts
+✖ Invalid input: expected array, received undefined
+  → at layers

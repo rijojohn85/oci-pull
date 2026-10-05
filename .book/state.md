@@ -34,7 +34,7 @@ wins: fix this file.
 | 3 | Reading an Image Name | done |
 | 4 | The First Call to the Registry | done |
 | 5 | Getting Permission: Tokens | done |
-| 6 | The Manifest: Trusting Nothing from the Server | planned |
+| 6 | The Manifest: Trusting Nothing from the Server | written (awaiting user) |
 | 7 | Downloading One Layer | planned |
 | 8 | Downloading Many Layers at Once | planned |
 | 9 | Unpacking Layers into a Folder | planned |
@@ -44,21 +44,23 @@ wins: fix this file.
 
 ## Current work
 
-- Chapter: 5, Getting Permission: Tokens
-- Phase: done (user committed "finished chapter 5"); Ch6 not started
-- Done so far: all steps. Code verified in a scratch copy: 36 tests
-  passing, `tsc` clean. Real runs against Docker Hub, mcr, ghcr, quay.
-- Captures: `.book/captures/ch05/` holds the key captures (saved
-  afterwards from the drafting session; the chapter text itself is the
-  full record).
-- Scratch: not present (the Ch5 scratch lived in the old agent's temp dir).
-  Rebuild it in `.book/scratch/` if needed.
-- Chapter 5's promise to Chapter 6: parse the manifest bytes with zod
-  (`JSON.parse` gives `any`); tell an index (one per CPU) from a single image
-  manifest by media type, and pick the entry for the user's CPU. Ch5 showed
-  both `application/vnd.oci.image.index.v1+json` (Docker Hub) and
-  `application/vnd.docker.distribution.manifest.list.v2+json` (mcr, ghcr).
-- **Next:** start Ch6 at the chapter loop, step 1, when the user asks.
+- Chapter: 6, The Manifest: Trusting Nothing from the Server
+- Phase: written (awaiting user). Steps 1-8 of the chapter loop done.
+- Code verified in `.book/scratch/oci-pull` (= book's Ch6 code): `npm run
+  check` 53 passed, 6 files. In-between counts captured: Step 3/4 = 36,
+  Step 5 = 43, Step 6 = 50, Step 7 = 53, Step 8 TS6133 RawManifest (5,30)
+  then 53. Captures in `.book/captures/ch06/` (00a/00b by-hand curl, 01-14).
+  mdbook build OK. Design checklist OK.
+- Promises made by Ch6 (later chapters must keep):
+  - Ch7: compute sha256 while streaming layers AND check the manifest's own
+    digest; content store named by checksum.
+  - Ch8: our own generic function (could fold parseManifest's two safeParse
+    branches); download all layers at once.
+  - Ch10: tidy the growing `instanceof` list in main's catch; `--platform`
+    option (resolveImage already takes `want`).
+  - Ch9: stack layers into one folder.
+- **Next:** wait for the user to type Ch6 and say it works; then check their
+  code (read only), mark Ch6 done. User will need `npm install zod`.
 
 ## User's code vs the book's
 
@@ -83,3 +85,5 @@ wins: fix this file.
 - 2026-09-24 Claude Code: Ch4 done (user committed). Ch5 written and verified.
 - 2026-09-24 Claude Code: moved book state into `.book/` so any agent can resume.
 - 2026-10-05 Claude Code: added a fold-out answer to every recap question in Ch1-5 (61 in all); fixed Ch5 baseURL→baseUrl; fixed the 2.5 primer's claim that JSON.parse returns unknown (it's `any`).
+- 2026-10-05 Claude Code: picked up Ch6; user's code checked green (37 tests).
+- 2026-10-05 Claude Code: Ch6 written and verified (53 tests); awaiting user.

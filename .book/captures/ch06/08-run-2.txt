@@ -1,0 +1,11 @@
+$ npm start --silent -- mcr.microsoft.com/azurelinux/base/core:3.0 ./rootfs
+# state: Ch6 final code, real network, x64 machine
+registry   mcr.microsoft.com
+repository azurelinux/base/core
+tag        3.0
+api        open, no token needed
+platform   linux/amd64
+manifest   sha256:8e53e07b6a3887d814c4d6f75038f16daf9f549216a57b0824b64f51fd25fb13
+config     sha256:9c41197d3a2c9f837f56c0087c5401c7385380fb16a52c3cff331d652da4159f
+layer 1/1  sha256:fe3d6e646b61abbc2ef0f910d48ee88fb9c99d0d6dc80c3c12dcff1788194f16  32.2 MB
+would pull into ./rootfs

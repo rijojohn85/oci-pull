@@ -1,0 +1,28 @@
+$ curl -sS -H "Accept: application/vnd.docker.distribution.manifest.list.v2+json" https://mcr.microsoft.com/v2/azurelinux/base/core/manifests/3.0
+{
+   "schemaVersion": 2,
+   "mediaType": "application/vnd.docker.distribution.manifest.list.v2+json",
+   "manifests": [
+      {
+         "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+         "size": 528,
+         "digest": "sha256:8e53e07b6a3887d814c4d6f75038f16daf9f549216a57b0824b64f51fd25fb13",
+         "platform": {
+            "architecture": "amd64",
+            "os": "linux",
+            "os.version": "azurelinux-3.0"
+         }
+      },
+      {
+         "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+         "size": 528,
+         "digest": "sha256:7e6f5bbc9a3f33e439c0aec20adb239dc6f1cd14b71e0792b3d6a618cda123e3",
+         "platform": {
+            "architecture": "arm64",
+            "os": "linux",
+            "os.version": "azurelinux-3.0",
+            "variant": "v8"
+         }
+      }
+   ]
+}
