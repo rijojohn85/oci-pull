@@ -74,3 +74,18 @@
 | `execFile` + `promisify` (callback → Promise) | Ch7 Step 5 | — |
 | `array.entries()` + `[i, x]` destructuring in `for...of` | Ch7 Step 6 | — |
 | `runc spec --rootless`, `runc run` | Ch7 Try it | Ch11 |
+| Function type `(a: A) => void`; callback option instead of printing | Ch8 Step 1 `OnLayer` | — |
+| Options object with optional fields + destructuring defaults `{ x = 3 } = options` | Ch8 Step 1 | Ch8 Step 3/4 |
+| `Map` (new Map(pairs), get) | Ch8 Step 1 `textSource` | — |
+| async call starts at once; `Promise.all` keeps order | Ch8 Step 2 | — |
+| `setTimeout` wrapped in a Promise (`pause`/`sleep`) | Ch8 Step 3 | Ch8 `sleep` |
+| `yield*` | Ch8 Step 3 | — |
+| Worker pool over one shared iterator; no lock needed (one thread, switches at await) | Ch8 Step 3 | Ch8 `mapWithLimit` |
+| `**`, retry with backoff | Ch8 Step 4 | Ch8 `retry` (Your turn) |
+| `mockRejectedValueOnce` / `mockRejectedValue` | Ch8 Step 4 | Ch8 Your turn, retry tests |
+| Write whole, then split; outside tests unchanged across splits | Ch8 Steps 4-6 | later chapters, sometimes |
+| Generic function `<T, R>` (vs Go `[T, R any]`), inferred from arguments | Ch8 Step 5 `mapWithLimit` | Ch8 `retry<T>` (Your turn), `parseWith<T>` (Your turn) |
+| DRY at the second use (`pause` → `sleep`) | Ch8 Step 5 | — |
+| `return await` inside try | Ch8 Step 6 | — |
+| Fake timers `vi.useFakeTimers`, `advanceTimersByTimeAsync`, `useRealTimers`; attach `rejects` before advancing | Ch8 Step 6 | — |
+| `z.ZodType<T>` | Ch8 Step 7 (Your turn) | — |

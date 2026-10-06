@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-5015955c.js";
+            window.path_to_searchindex_js = "searchindex-3093cb03.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-f5958a6c.js"></script>
@@ -857,9 +857,20 @@ function checkDigest(raw: RawManifest, digest: string): void {
 <pre><code class="language-ts">import { sha256Digest } from "./digest.ts"
 import { DIGEST_PATTERN } from "./reference.ts"
 </code></pre>
-<p>A tag (<code>3.20</code>) names nothing exact. It can move to a new image any
-time. So only digest requests can be checked, and <code>DIGEST_PATTERN</code>
-from Chapter 3 tells the two apart.</p>
+<p>Why two checks, and why is the first one an <code>if</code>? To check a download
+you need to know the right answer in advance:</p>
+<ul>
+<li>A <strong>digest</strong> (<code>sha256:c64c…</code>) is a fingerprint of exact bytes. Hash
+what arrived; the same fingerprint means the right bytes.</li>
+<li>A <strong>tag</strong> (<code>3.20</code>) is a name the publisher can move. Today it points
+at one image, and after a security fix, at another. Nothing in “3.20”
+says which bytes to expect, so there’s nothing to compare.</li>
+</ul>
+<p>So the first fetch is checked only if the user typed a digest
+(<code>DIGEST_PATTERN</code> from Chapter 3 tells the two apart). The second fetch
+is always checked: we fetch the entry we picked from the index by the
+digest the index gave us, so now there’s always a fingerprint to
+compare. A tag pull is checked from the second step on.</p>
 <p>Run the tests:</p>
 <pre><code>$ npm test
 </code></pre>
@@ -1343,11 +1354,13 @@ real ones and hash to the real digest.</p>
 <p><strong>11. Why can only digest requests be checked, not tag requests?</strong></p>
 <details>
 <summary>Answer</summary>
-<p>A digest names exact bytes, so there’s something to compare against.
-A tag like <code>3.20</code> is just a label that can move to a new image at any
-time, so any manifest is a valid answer for it. That’s why
-<code>resolveImage</code> checks only when <code>DIGEST_PATTERN</code> matches the reference,
-and always for the entry picked from an index.</p>
+<p>A check needs a right answer to compare against. A digest is a
+fingerprint of exact bytes, so we hash what arrived and compare. A tag
+like <code>3.20</code> is a name that can be moved to a new image at any time, so
+it doesn’t say which bytes to expect. That’s why the first fetch is
+checked only when the user typed a digest. The second fetch, the entry
+picked from the index, is always checked, because we fetch it by the
+digest the index gave us.</p>
 </details>
 <p><strong>12. Why is <code>unpackWithSystemTar</code> called a shortcut, and why does <code>execFile</code> get a list of arguments?</strong></p>
 <details>
@@ -1414,6 +1427,22 @@ a millisecond.</p>
         <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
         <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
 
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
 
 
         <script>

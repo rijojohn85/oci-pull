@@ -114,9 +114,9 @@ shortcuts. Each later chapter replaces one shortcut with the real thing.
    download one at a time, and the system's `tar` command unpacks them.
 8. **Downloading Many Layers at Once** — replaces the one-at-a-time loop.
    `Promise.all`, why "all at once" needs a limit, writing a small limiter
-   ourselves (first generic function, explained plainly), cancelling with
-   `AbortController`, retry with backoff, and faking the *clock* so retry
-   tests take milliseconds
+   ourselves (first generic function, explained plainly), retry with
+   backoff, and faking the *clock* so retry tests take milliseconds.
+   Built whole first, then split into helpers with the tests unchanged
 9. **Unpacking Layers into a Folder** — replaces the system `tar` shortcut.
    Layers apply in order, later ones win, a file named `.wh.foo` means
    "delete `foo`" (which the system `tar` got wrong); the `tar` package;
@@ -130,8 +130,9 @@ shortcuts. Each later chapter replaces one shortcut with the real thing.
     Chapters 8 and 9, and what `runc spec`'s config actually controls
 12. **Getting to Production** — turning `.ts` into shippable `.js`, what
     `package.json` needs so others can install it, structured errors
-    with exit codes, a lint step, and the honest list of what this tool
-    still doesn't do
+    with exit codes, cancelling downloads still running after one fails
+    (`AbortController`), retrying only errors worth retrying, a lint
+    step, and the honest list of what this tool still doesn't do
 
 Each chapter ends with a working, commit-able state, a short "what you
 should now be able to answer," and a one-paragraph preview of the next

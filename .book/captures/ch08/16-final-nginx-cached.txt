@@ -1,0 +1,23 @@
+$ time npm start --silent -- nginx:1.27-alpine /tmp/oci-nginx/rootfs
+# state: Ch8 final; cache full from previous run; bash time
+registry   docker.io
+repository library/nginx
+tag        1.27-alpine
+api        needs a token
+challenge  Bearer realm="https://auth.docker.io/token",service="registry.docker.io"
+platform   linux/amd64
+manifest   sha256:62223d644fa234c3a1cc785ee14242ec47a77364226f1c811d2f669f96dc2ac8
+config     sha256:6769dc3a703c719c1d2756bda113659be28ae16cf0da58dd5fd823d6b9a050ea
+layer 1/8  sha256:f18232174bc91741fdf3da96d85011092101a032a93a388b79e99e69c2d5c870  3.6 MB  cached
+layer 3/8  sha256:b464cfdf2a6319875aeb27359ec549790ce14d8214fcb16ef915e4530e5ed235  0.0 MB  cached
+layer 2/8  sha256:61ca4f733c802afd9e05a32f0de0361b6d713b8b53292dc15fb093229f648674  1.8 MB  cached
+layer 4/8  sha256:d7e5070240863957ebb0b5a44a5729963c3462666baa2947d00628cb5f2d5773  0.0 MB  cached
+layer 5/8  sha256:81bd8ed7ec6789b0cb7f1b47ee731c522f6dba83201ec73cd6bca1350f582948  0.0 MB  cached
+layer 6/8  sha256:197eb75867ef4fcecd4724f17b0972ab0489436860a594a9445f8eaff8155053  0.0 MB  cached
+layer 7/8  sha256:34a64644b756511a2e217f0508e11d1a572085d66cd6dc9a555a082ad49a3102  0.0 MB  cached
+layer 8/8  sha256:39c2ddfd6010082a4a646e7ca44e95aca9bf3eaebc00f17f7ccc2954004f2a7d  15.5 MB  cached
+unpacked   /tmp/oci-nginx/rootfs
+
+real	0m2.470s
+user	0m0.555s
+sys	0m0.142s

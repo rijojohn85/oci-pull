@@ -829,9 +829,20 @@ import { sha256Digest } from "./digest.ts"
 import { DIGEST_PATTERN } from "./reference.ts"
 ```
 
-A tag (`3.20`) names nothing exact. It can move to a new image any
-time. So only digest requests can be checked, and `DIGEST_PATTERN`
-from Chapter 3 tells the two apart.
+Why two checks, and why is the first one an `if`? To check a download
+you need to know the right answer in advance:
+
+- A **digest** (`sha256:c64c…`) is a fingerprint of exact bytes. Hash
+  what arrived; the same fingerprint means the right bytes.
+- A **tag** (`3.20`) is a name the publisher can move. Today it points
+  at one image, and after a security fix, at another. Nothing in "3.20"
+  says which bytes to expect, so there's nothing to compare.
+
+So the first fetch is checked only if the user typed a digest
+(`DIGEST_PATTERN` from Chapter 3 tells the two apart). The second fetch
+is always checked: we fetch the entry we picked from the index by the
+digest the index gave us, so now there's always a fingerprint to
+compare. A tag pull is checked from the second step on.
 
 Run the tests:
 
@@ -1456,11 +1467,13 @@ real ones and hash to the real digest.
 <details>
 <summary>Answer</summary>
 
-A digest names exact bytes, so there's something to compare against.
-A tag like `3.20` is just a label that can move to a new image at any
-time, so any manifest is a valid answer for it. That's why
-`resolveImage` checks only when `DIGEST_PATTERN` matches the reference,
-and always for the entry picked from an index.
+A check needs a right answer to compare against. A digest is a
+fingerprint of exact bytes, so we hash what arrived and compare. A tag
+like `3.20` is a name that can be moved to a new image at any time, so
+it doesn't say which bytes to expect. That's why the first fetch is
+checked only when the user typed a digest. The second fetch, the entry
+picked from the index, is always checked, because we fetch it by the
+digest the index gave us.
 
 </details>
 

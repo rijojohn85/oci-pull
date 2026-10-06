@@ -1,0 +1,99 @@
+$ npx vitest run src/tasks.test.ts
+# state: Step 6: on purpose, 'return await attempt()' changed to 'return attempt()'
+
+ RUN  v5.0.1 /home/rijojohn/csi-driver/oci-pull-book/.book/scratch/oci-pull
+
+(node:1707906) PromiseRejectionHandledWarning: Promise rejection was handled asynchronously (rejection id: 7)
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ src/tasks.test.ts (4 tests | 2 failed) 51ms
+   ❯ retry (2)
+     × waits 1 second, then 2, between tries 5ms
+     × throws the last error when every try fails 3ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/tasks.test.ts > retry > waits 1 second, then 2, between tries
+AssertionError: expected "vi.fn()" to be called 2 times, but got 1 times
+ ❯ src/tasks.test.ts:59:21
+     57|     expect(attempt).toHaveBeenCalledTimes(1)
+     58|     await vi.advanceTimersByTimeAsync(1)
+     59|     expect(attempt).toHaveBeenCalledTimes(2)
+       |                     ^
+     60|
+     61|     // The second wait is twice as long.
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/tasks.test.ts > retry > throws the last error when every try fails
+AssertionError: expected [Function] to throw error including 'second' but got 'first'
+
+Expected: "second"
+Received: "first"
+
+ ❯ src/tasks.test.ts:75:50
+     73|     // Start checking for the error before moving the clock, so the
+     74|     // failure has somewhere to go the moment it happens.
+     75|     const check = expect(retry(attempt, 2, 1000)).rejects.toThrow("sec…
+       |                                                  ^
+     76|     await vi.advanceTimersByTimeAsync(1000)
+     77|     await check
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+⎯⎯⎯⎯⎯⎯ Unhandled Errors ⎯⎯⎯⎯⎯⎯
+
+Vitest caught 2 unhandled errors during the test run.
+This might cause false positive tests. Resolve unhandled errors to make sure your tests are not affected.
+
+⎯⎯⎯⎯ Unhandled Rejection ⎯⎯⎯⎯⎯
+Error: first
+ ❯ src/tasks.test.ts:46:35
+     44|   it("waits 1 second, then 2, between tries", async () => {
+     45|     const attempt = vi.fn<() => Promise<string>>()
+     46|     attempt.mockRejectedValueOnce(new Error("first"))
+       |                                   ^
+     47|     attempt.mockRejectedValueOnce(new Error("second"))
+     48|     attempt.mockResolvedValueOnce("worked")
+ ❯ node_modules/vitest/dist/chunks/run.C5UmxDPh.js:1628:35
+ ❯ node_modules/vitest/dist/chunks/run.C5UmxDPh.js:2783:26
+ ❯ node_modules/vitest/dist/chunks/run.C5UmxDPh.js:3319:20
+ ❯ runWithCancel node_modules/vitest/dist/chunks/run.C5UmxDPh.js:3314:10
+ ❯ node_modules/vitest/dist/chunks/run.C5UmxDPh.js:3299:20
+ ❯ runWithTimeout node_modules/vitest/dist/chunks/run.C5UmxDPh.js:3257:10
+ ❯ node_modules/vitest/dist/chunks/run.C5UmxDPh.js:3876:64
+
+This error originated in "src/tasks.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The last test to run before this error was "waits 1 second, then 2, between tries". This means either:
+- the error was thrown while Vitest was running this test, or
+- the error was thrown after the test completed, and this was the most recent test at that point.
+
+⎯⎯⎯⎯ Unhandled Rejection ⎯⎯⎯⎯⎯
+AssertionError: expected [Function] to throw error including 'second' but got 'first'
+ ❯ Assertion.__VITEST_REJECTS__ node_modules/vitest/dist/chunks/index.m3L2HgmY.js:2453:33
+ ❯ Assertion.propertyGetter node_modules/chai/index.js:1570:27
+ ❯ Object.proxyGetter [as get] node_modules/chai/index.js:1659:22
+ ❯ src/tasks.test.ts:75:50
+     73|     // Start checking for the error before moving the clock, so the
+     74|     // failure has somewhere to go the moment it happens.
+     75|     const check = expect(retry(attempt, 2, 1000)).rejects.toThrow("sec…
+       |                                                  ^
+     76|     await vi.advanceTimersByTimeAsync(1000)
+     77|     await check
+ ❯ node_modules/vitest/dist/chunks/run.C5UmxDPh.js:1628:35
+ ❯ node_modules/vitest/dist/chunks/run.C5UmxDPh.js:2783:26
+ ❯ node_modules/vitest/dist/chunks/run.C5UmxDPh.js:3319:20
+ ❯ runWithCancel node_modules/vitest/dist/chunks/run.C5UmxDPh.js:3314:10
+
+This error originated in "src/tasks.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The last test to run before this error was "throws the last error when every try fails". This means either:
+- the error was thrown while Vitest was running this test, or
+- the error was thrown after the test completed, and this was the most recent test at that point.
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 2 passed (4)
+     Errors  2 errors
+   Start at  10:35:44
+   Duration  165ms (tests 59%, transform 27%, import 12%, worker 3%)
+

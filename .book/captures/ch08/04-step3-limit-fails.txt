@@ -1,0 +1,48 @@
+$ npm run check
+# state: Step 3: limit test added, Step 2 code (Promise.all)
+
+> oci-pull@1.0.0 check
+> npm run typecheck && npm run test
+
+
+> oci-pull@1.0.0 typecheck
+> tsc --noEmit
+
+
+> oci-pull@1.0.0 test
+> vitest run
+
+
+ RUN  v5.0.1 /home/rijojohn/csi-driver/oci-pull-book/.book/scratch/oci-pull
+
+ ❯ src/pull.test.ts (5 tests | 1 failed) 43ms
+   ❯ downloadLayers (3)
+     × downloads at most `limit` layers at the same time 16ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pull.test.ts > downloadLayers > downloads at most `limit` layers at the same time
+AssertionError: expected 5 to be 2 // Object.is equality
+
+- Expected
++ Received
+
+- 2
++ 5
+
+ ❯ src/pull.test.ts:118:18
+    116|     await downloadLayers(counting, store, "library/alpine", texts.map(…
+    117|
+    118|     expect(most).toBe(2)
+       |                  ^
+    119|   })
+    120| })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 7 passed (8)
+      Tests  1 failed | 64 passed (65)
+   Start at  10:33:32
+   Duration  276ms (transform 41%, import 37%, tests 19%, worker 4%)
+

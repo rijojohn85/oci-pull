@@ -1,0 +1,40 @@
+$ npx vitest run src/tasks.test.ts
+# state: Step 5: on purpose, removed the 'if (failed)' check from mapWithLimit (tsc would also flag 'failed' as unused: TS6133)
+
+ RUN  v5.0.1 /home/rijojohn/csi-driver/oci-pull-book/.book/scratch/oci-pull
+
+ ❯ src/tasks.test.ts (2 tests | 1 failed) 48ms
+   ❯ mapWithLimit (2)
+     × starts nothing new after a failure 15ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/tasks.test.ts > mapWithLimit > starts nothing new after a failure
+AssertionError: expected [ 'slow', 'bad', 'c', 'd' ] to deeply equal [ 'slow', 'bad' ]
+
+- Expected
++ Received
+
+  [
+    "slow",
+    "bad",
++   "c",
++   "d",
+  ]
+
+ ❯ src/tasks.test.ts:30:21
+     28|     // Give "slow" time to finish; its worker must not take "c".
+     29|     await sleep(10)
+     30|     expect(started).toEqual(["slow", "bad"])
+       |                     ^
+     31|   })
+     32| })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)
+   Start at  10:35:15
+   Duration  146ms (tests 59%, transform 26%, import 12%, worker 3%)
+

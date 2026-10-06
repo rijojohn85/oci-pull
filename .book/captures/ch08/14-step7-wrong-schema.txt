@@ -1,0 +1,7 @@
+$ npm run typecheck
+# state: Step 7: on purpose, index branch given ImageManifestSchema
+
+> oci-pull@1.0.0 typecheck
+> tsc --noEmit
+
+src/manifest.ts(114,29): error TS2741: Property 'manifests' is missing in type '{ schemaVersion: 2; config: { mediaType: string; digest: string; size: number; }; layers: { mediaType: string; digest: string; size: number; }[]; }' but required in type '{ schemaVersion: 2; manifests: { mediaType: string; digest: string; size: number; platform?: { os: string; architecture: string; variant?: string | undefined; } | undefined; }[]; }'.

@@ -1,0 +1,23 @@
+$ npm run check
+# state: Step 7: parseWith<T> folds parseManifest's two safeParse branches
+
+> oci-pull@1.0.0 check
+> npm run typecheck && npm run test
+
+
+> oci-pull@1.0.0 typecheck
+> tsc --noEmit
+
+
+> oci-pull@1.0.0 test
+> vitest run
+
+
+ RUN  v5.0.1 /home/rijojohn/csi-driver/oci-pull-book/.book/scratch/oci-pull
+
+
+ Test Files  9 passed (9)
+      Tests  71 passed (71)
+   Start at  10:35:53
+   Duration  318ms (transform 38%, import 36%, tests 22%, worker 3%)
+

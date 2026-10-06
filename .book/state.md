@@ -35,8 +35,8 @@ wins: fix this file.
 | 4 | The First Call to the Registry | done |
 | 5 | Getting Permission: Tokens | done |
 | 6 | The Manifest: Trusting Nothing from the Server | done |
-| 7 | The Whole Pull, Rough Version | written (awaiting user) |
-| 8 | Downloading Many Layers at Once | planned |
+| 7 | The Whole Pull, Rough Version | done |
+| 8 | Downloading Many Layers at Once | written (awaiting user) |
 | 9 | Unpacking Layers into a Folder | planned |
 | 10 | The Command Line | planned |
 | 11 | Running It for Real with runc | planned |
@@ -90,8 +90,26 @@ wins: fix this file.
   half-failed download, fake the clock. Ch9 = replace system tar (whiteouts,
   zstd), real temp-folder tests. Ch10 = tidy errors (incl. tar failure stack
   trace), --platform. Ch11 = what's in config.json; image config's command.
-- **Next:** wait for the user to type Ch7 and say it works; check their code
-  (read only); mark done.
+- Ch7 done: user committed 21472ee; their check 63 passed (copy in
+  scratchpad). They have NOT yet applied the SHA256_DIGEST pathFor fix
+  (their pathFor still uses startsWith) — remind them.
+- Ch8 written (first "write it whole, then split it" chapter):
+  src/08-downloading-many-layers-at-once.md. Code in scratch/oci-pull
+  (final 71 tests); per-step snapshots scratch/ch8-step1..7 (+ch7-src).
+  New: pull.ts downloadLayers + OnLayer + DownloadOptions {limit,
+  attempts, delayMs, onLayer}; tasks.ts (sleep, mapWithLimit<T,R>,
+  retry<T>); tasks.test.ts (4, fake timers for retry); manifest.ts
+  parseWith<T>(z.ZodType<T>) folds Ch6's branches; main.ts uses
+  downloadLayers with onLayer printing. Counts: S1 64, S2 64, S3 fail
+  5≠2 then 65, S4 67, S5 67 → 69, S6 69 → 71, S7 71. On-purpose fails:
+  no `if (failed)` (vitest only; tsc TS6133), `return attempt()`,
+  wrong schema TS2741. Demo image nginx:1.27-alpine (8 layers): Ch7
+  7.6s, Promise.all 5.4s, limit 3 4.9s, cached 2.5s. Captures
+  .book/captures/ch08/00-16. Every ts line checked against scratch.
+  Docker default 3 concurrent downloads verified (context7, docker ref).
+- Moved from Ch8 to Ch12 (outline updated): AbortController cancelling,
+  retry only retryable errors (404 retried today).
+- **Next:** user types Ch8; check their code (read only); mark done.
 
 ## User's code vs the book's
 
@@ -135,3 +153,4 @@ wins: fix this file.
 - 2026-10-05 Claude Code: user picked 1-5 + walking skeleton; AGENTS.md, outline updated.
 - 2026-10-05 Claude Code: retrofitted Ch3-6 with the map; skill updated for future books.
 - 2026-10-05 Claude Code: Ch7 (walking skeleton) written and verified, 62 tests; alpine + node:22-alpine run in rootless runc.
+- 2026-10-06 Claude Code: Ch7 marked done (user's 21472ee). Ch8 written and verified, 71 tests, first whole-then-split chapter.

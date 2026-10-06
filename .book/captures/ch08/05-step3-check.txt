@@ -1,0 +1,23 @@
+$ npm run check
+# state: Step 3: limit via workers + shared queue
+
+> oci-pull@1.0.0 check
+> npm run typecheck && npm run test
+
+
+> oci-pull@1.0.0 typecheck
+> tsc --noEmit
+
+
+> oci-pull@1.0.0 test
+> vitest run
+
+
+ RUN  v5.0.1 /home/rijojohn/csi-driver/oci-pull-book/.book/scratch/oci-pull
+
+
+ Test Files  8 passed (8)
+      Tests  65 passed (65)
+   Start at  10:33:39
+   Duration  298ms (import 42%, transform 37%, tests 17%, worker 4%)
+

@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-5015955c.js";
+            window.path_to_searchindex_js = "searchindex-3093cb03.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-f5958a6c.js"></script>
@@ -276,9 +276,9 @@ class, one job.</em> Two honest shortcuts, each replaced later: layers
 download one at a time, and the system’s <code>tar</code> command unpacks them.</li>
 <li><strong>Downloading Many Layers at Once</strong> — replaces the one-at-a-time loop.
 <code>Promise.all</code>, why “all at once” needs a limit, writing a small limiter
-ourselves (first generic function, explained plainly), cancelling with
-<code>AbortController</code>, retry with backoff, and faking the <em>clock</em> so retry
-tests take milliseconds</li>
+ourselves (first generic function, explained plainly), retry with
+backoff, and faking the <em>clock</em> so retry tests take milliseconds.
+Built whole first, then split into helpers with the tests unchanged</li>
 <li><strong>Unpacking Layers into a Folder</strong> — replaces the system <code>tar</code> shortcut.
 Layers apply in order, later ones win, a file named <code>.wh.foo</code> means
 “delete <code>foo</code>” (which the system <code>tar</code> got wrong); the <code>tar</code> package;
@@ -292,8 +292,9 @@ now a bigger image with several layers and a deleted file, to prove
 Chapters 8 and 9, and what <code>runc spec</code>’s config actually controls</li>
 <li><strong>Getting to Production</strong> — turning <code>.ts</code> into shippable <code>.js</code>, what
 <code>package.json</code> needs so others can install it, structured errors
-with exit codes, a lint step, and the honest list of what this tool
-still doesn’t do</li>
+with exit codes, cancelling downloads still running after one fails
+(<code>AbortController</code>), retrying only errors worth retrying, a lint
+step, and the honest list of what this tool still doesn’t do</li>
 </ol>
 <p>Each chapter ends with a working, commit-able state, a short “what you
 should now be able to answer,” and a one-paragraph preview of the next
@@ -6606,9 +6607,20 @@ function checkDigest(raw: RawManifest, digest: string): void {
 <pre><code class="language-ts">import { sha256Digest } from "./digest.ts"
 import { DIGEST_PATTERN } from "./reference.ts"
 </code></pre>
-<p>A tag (<code>3.20</code>) names nothing exact. It can move to a new image any
-time. So only digest requests can be checked, and <code>DIGEST_PATTERN</code>
-from Chapter 3 tells the two apart.</p>
+<p>Why two checks, and why is the first one an <code>if</code>? To check a download
+you need to know the right answer in advance:</p>
+<ul>
+<li>A <strong>digest</strong> (<code>sha256:c64c…</code>) is a fingerprint of exact bytes. Hash
+what arrived; the same fingerprint means the right bytes.</li>
+<li>A <strong>tag</strong> (<code>3.20</code>) is a name the publisher can move. Today it points
+at one image, and after a security fix, at another. Nothing in “3.20”
+says which bytes to expect, so there’s nothing to compare.</li>
+</ul>
+<p>So the first fetch is checked only if the user typed a digest
+(<code>DIGEST_PATTERN</code> from Chapter 3 tells the two apart). The second fetch
+is always checked: we fetch the entry we picked from the index by the
+digest the index gave us, so now there’s always a fingerprint to
+compare. A tag pull is checked from the second step on.</p>
 <p>Run the tests:</p>
 <pre><code>$ npm test
 </code></pre>
@@ -7092,11 +7104,13 @@ real ones and hash to the real digest.</p>
 <p><strong>11. Why can only digest requests be checked, not tag requests?</strong></p>
 <details>
 <summary>Answer</summary>
-<p>A digest names exact bytes, so there’s something to compare against.
-A tag like <code>3.20</code> is just a label that can move to a new image at any
-time, so any manifest is a valid answer for it. That’s why
-<code>resolveImage</code> checks only when <code>DIGEST_PATTERN</code> matches the reference,
-and always for the entry picked from an index.</p>
+<p>A check needs a right answer to compare against. A digest is a
+fingerprint of exact bytes, so we hash what arrived and compare. A tag
+like <code>3.20</code> is a name that can be moved to a new image at any time, so
+it doesn’t say which bytes to expect. That’s why the first fetch is
+checked only when the user typed a digest. The second fetch, the entry
+picked from the index, is always checked, because we fetch it by the
+digest the index gave us.</p>
 </details>
 <p><strong>12. Why is <code>unpackWithSystemTar</code> called a shortcut, and why does <code>execFile</code> get a list of arguments?</strong></p>
 <details>
@@ -7128,7 +7142,1275 @@ retry a download that fails halfway, and test the waiting between
 retries by faking the <em>clock</em>, so a test that “waits 10 seconds” takes
 a millisecond.</p>
 <div style="break-before: page; page-break-before: always;"></div>
-<h1 id="downloading-many-layers-at-once"><a class="header" href="#downloading-many-layers-at-once">Downloading Many Layers at Once</a></h1>
+<h1 id="chapter-8-downloading-many-layers-at-once"><a class="header" href="#chapter-8-downloading-many-layers-at-once">Chapter 8: Downloading Many Layers at Once</a></h1>
+<p>Chapter 7 left the tool working from start to finish, with two
+shortcuts. This chapter removes the first one: layers downloading one
+at a time. By the end, the tool downloads up to three layers at once,
+tries a failed download again, and you’ll have tests that “wait”
+several seconds in no time at all.</p>
+<p>This chapter is also built in a new way. We’ll grow one function until
+it does everything, with all the logic written inline. Once it works and
+its tests pass, we’ll split it into small helpers, one step at a time,
+running the same tests after each step. That’s “make it work, then make
+it right,” the method Martin Fowler’s <em>Refactoring</em> opens with.</p>
+<p>New in this chapter: function types, <code>Promise.all</code>, sharing one
+iterator between workers, <code>yield*</code>, <code>Map</code>, default values when taking
+fields out of an object, <code>**</code>, <code>mockRejectedValueOnce</code>, generic
+functions (<code>&lt;T&gt;</code>), <code>return await</code>, and fake timers
+(<code>vi.useFakeTimers</code>).</p>
+<h2 id="where-we-are-5"><a class="header" href="#where-we-are-5">Where we are</a></h2>
+<p>Pulling an image takes six stages. This chapter’s is marked ▶:</p>
+<ul>
+<li>✓ 1. Read the image name (Ch3)</li>
+<li>✓ 2. Ask the registry, get a token (Ch4–5)</li>
+<li>✓ 3. Read the manifest, pick the platform (Ch6)</li>
+<li>▶ <strong>4. Download the layers, check them</strong> (Ch7; this chapter makes it fast and sturdy)</li>
+<li>✓ 5. Unpack them into a folder (Ch7, roughly; properly in Ch9)</li>
+<li>✓ 6. Run it with runc (Ch7; more in Ch11)</li>
+</ul>
+<p>Here’s the tool as Chapter 7 left it, pulling <code>nginx:1.27-alpine</code> with
+an empty cache. This image has eight layers, and six of them are tiny:</p>
+<pre><code>$ time npm start --silent -- nginx:1.27-alpine /tmp/oci-nginx/rootfs
+</code></pre>
+<pre><code>registry   docker.io
+repository library/nginx
+tag        1.27-alpine
+api        needs a token
+challenge  Bearer realm="https://auth.docker.io/token",service="registry.docker.io"
+platform   linux/amd64
+manifest   sha256:62223d644fa234c3a1cc785ee14242ec47a77364226f1c811d2f669f96dc2ac8
+config     sha256:6769dc3a703c719c1d2756bda113659be28ae16cf0da58dd5fd823d6b9a050ea
+layer 1/8  sha256:f18232174bc91741fdf3da96d85011092101a032a93a388b79e99e69c2d5c870  3.6 MB  downloaded
+layer 2/8  sha256:61ca4f733c802afd9e05a32f0de0361b6d713b8b53292dc15fb093229f648674  1.8 MB  downloaded
+layer 3/8  sha256:b464cfdf2a6319875aeb27359ec549790ce14d8214fcb16ef915e4530e5ed235  0.0 MB  downloaded
+layer 4/8  sha256:d7e5070240863957ebb0b5a44a5729963c3462666baa2947d00628cb5f2d5773  0.0 MB  downloaded
+layer 5/8  sha256:81bd8ed7ec6789b0cb7f1b47ee731c522f6dba83201ec73cd6bca1350f582948  0.0 MB  downloaded
+layer 6/8  sha256:197eb75867ef4fcecd4724f17b0972ab0489436860a594a9445f8eaff8155053  0.0 MB  downloaded
+layer 7/8  sha256:34a64644b756511a2e217f0508e11d1a572085d66cd6dc9a555a082ad49a3102  0.0 MB  downloaded
+layer 8/8  sha256:39c2ddfd6010082a4a646e7ca44e95aca9bf3eaebc00f17f7ccc2954004f2a7d  15.5 MB  downloaded
+unpacked   /tmp/oci-nginx/rootfs
+
+real	0m7.579s
+user	0m1.085s
+sys	0m0.321s
+</code></pre>
+<p>7.6 seconds, and the computer was busy for about 1.4 of them (<code>user</code>
+plus <code>sys</code>). The rest was waiting. Layers 3 to 7 are less than 0.05 MB
+each, yet each one waited its turn. A download costs a few round trips
+before the first byte arrives: ask the registry, get sent to the
+download server (the <code>307</code> from Chapter 7), connect there. Those round
+trips cost the same for 1 KB as for 15 MB, and we paid for them eight
+times in a row.</p>
+<p>There’s a second problem you can’t see in a good run. If the connection
+drops during layer 8, the whole pull fails, and the next run starts
+layer 8 from zero.</p>
+<h2 id="why-this-chapter"><a class="header" href="#why-this-chapter">Why this chapter</a></h2>
+<p>Real images have more layers than nginx: 10 to 20 is common, and some
+have 50. Downloading them in line makes every pull as slow as the sum
+of all the waiting. Downloading them together makes it about as slow as
+the biggest layer. And a pull that takes a minute should survive a
+network hiccup without making you start over.</p>
+<p>By the end of this chapter you can:</p>
+<ul>
+<li>Download all of an image’s layers at the same time, but never more
+than three at once.</li>
+<li>Try a failed download again, waiting a little longer each time.</li>
+<li>Write a generic function: one that works for any type of value.</li>
+<li>Grow a function inline, then split it into helpers without changing
+a single test.</li>
+</ul>
+<h2 id="the-plan-3"><a class="header" href="#the-plan-3">The plan</a></h2>
+<p>We’ll build <code>downloadLayers</code> in <code>src/pull.ts</code>: “make sure every layer
+of this image is in the store.” Each step adds one thing to it, inline:</p>
+<ol>
+<li>Move Chapter 7’s loop out of <code>main</code> into <code>downloadLayers</code>. Same
+behavior, but now it can be tested.</li>
+<li>Start all the downloads at once.</li>
+<li>Limit how many run at the same time.</li>
+<li>Try a failed download again.</li>
+</ol>
+<p>By then <code>downloadLayers</code> is about 40 lines and does four jobs. Then we
+split it:</p>
+<ol start="5">
+<li>Pull out the “how many at once” part as <code>mapWithLimit</code>.</li>
+<li>Pull out the “try again” part as <code>retry</code>, and test its waiting with
+a fake clock.</li>
+<li>Use the same idea, a generic function, to fold Chapter 6’s two
+copy-pasted <code>safeParse</code> branches into one.</li>
+</ol>
+<p>The tests from steps 1 to 4 test <code>downloadLayers</code> from the outside:
+what goes in, what comes out, what ends up in the store. They don’t
+know about any helper, so they must pass unchanged after every split.
+That’s how we’ll know a split didn’t break anything.</p>
+<h2 id="step-1-move-the-loop-out-of-main"><a class="header" href="#step-1-move-the-loop-out-of-main">Step 1: move the loop out of <code>main</code></a></h2>
+<p>Here’s the loop as Chapter 7 left it in <code>main.ts</code>:</p>
+<pre><code class="language-ts">    // ROUGH: one layer at a time. Chapter 8 downloads them all at once.
+    // entries() gives [position, item] pairs, like enumerate() in Python.
+    for (const [i, layer] of layers.entries()) {
+      const result = await downloadLayer(registry, store, ref.repository, layer)
+      console.log(`layer ${i + 1}/${layers.length}  ${layer.digest}  ${megabytes(layer.size)}  ${result}`)
+    }
+</code></pre>
+<p>Everything this chapter adds would go here, in <code>main</code>, which can’t be
+tested without the real Docker Hub. So first we move the loop into
+<code>src/pull.ts</code>, as <code>downloadLayers</code>. It shouldn’t print, though: a
+function that prints is hard to test, and <code>main</code> is the one that
+decides what the screen shows. So <code>downloadLayers</code> takes a function to
+call each time a layer finishes, and <code>main</code> passes one that prints.</p>
+<p>Add this to the end of <code>src/pull.ts</code>:</p>
+<pre><code class="language-ts">// Called as each layer finishes: where it is in the list, the layer, and
+// what happened to it. main uses it to print a progress line.
+export type OnLayer = (index: number, layer: Descriptor, result: LayerResult) =&gt; void
+
+// Settings for downloadLayers. The ? means the caller may leave it out.
+export interface DownloadOptions {
+  onLayer?: OnLayer
+}
+
+// Make sure every layer is in the store. Returns what happened to each
+// one, in the same order as `layers`.
+export async function downloadLayers(
+  source: BlobSource,
+  store: ContentStore,
+  repository: string,
+  layers: readonly Descriptor[],
+  options: DownloadOptions = {},
+): Promise&lt;LayerResult[]&gt; {
+  // Take onLayer out of options; if it's missing, use a function that does nothing.
+  const { onLayer = () =&gt; {} } = options
+  const results: LayerResult[] = []
+  // ROUGH, still: one layer at a time, as in Chapter 7.
+  for (const [i, layer] of layers.entries()) {
+    const result = await downloadLayer(source, store, repository, layer)
+    results.push(result)
+    onLayer(i, layer, result)
+  }
+  return results
+}
+</code></pre>
+<p><strong><code>OnLayer</code> is a function type.</strong> It describes a function by what it
+takes and what it gives back: three arguments, returns nothing
+(<code>void</code>). It’s the same as Go’s <code>func(int, Descriptor, LayerResult)</code>,
+or Python’s <code>Callable[[int, Descriptor, LayerResult], None]</code>.</p>
+<p><strong><code>options</code></strong> groups the settings into one object. It has one field
+now, and three more by the end of the chapter. The <code>?</code> in <code>onLayer?</code>
+makes the field optional (as <code>headers?</code> did in Chapter 5), and
+<code>options: DownloadOptions = {}</code> lets a caller leave out the whole
+object. Adding a new optional field later won’t break any code that
+calls <code>downloadLayers</code>, including the tests.</p>
+<p><strong><code>const { onLayer = () =&gt; {} } = options</code></strong> takes the field out of the
+object and gives it a default for when it’s missing: here, an arrow
+function that does nothing. After this line <code>onLayer</code> is never
+<code>undefined</code>, so the loop can call it without checking.</p>
+<p><strong><code>readonly Descriptor[]</code></strong> promises that <code>downloadLayers</code> won’t change
+the list it’s given (Chapter 6 used <code>readonly</code> the same way).</p>
+<p>Now <code>main.ts</code>. Change the import from <code>downloadLayer</code> to
+<code>downloadLayers</code>, and replace the loop with:</p>
+<pre><code class="language-ts">    // Print a line as each layer finishes.
+    await downloadLayers(registry, store, ref.repository, layers, {
+      onLayer: (i, layer, result) =&gt; {
+        console.log(`layer ${i + 1}/${layers.length}  ${layer.digest}  ${megabytes(layer.size)}  ${result}`)
+      },
+    })
+</code></pre>
+<p>The arrow function’s parameters have no types written on them. They
+don’t need any: <code>onLayer</code> must be an <code>OnLayer</code>, so the compiler already
+knows <code>i</code> is a number, <code>layer</code> a <code>Descriptor</code> and <code>result</code> a
+<code>LayerResult</code>.</p>
+<h3 id="tests-from-the-outside"><a class="header" href="#tests-from-the-outside">Tests from the outside</a></h3>
+<p>These tests are the ones that must survive every split later on, so
+they only look at what <code>downloadLayers</code> does from the outside. They
+need layers with real bytes, and a fake registry that serves them. Add
+to <code>src/pull.test.ts</code>, below the existing tests. First two helpers:</p>
+<pre><code class="language-ts">// A layer whose bytes are `text`: its real digest and size, the way a
+// manifest would list it.
+function layerOf(text: string): Descriptor {
+  const bytes = new TextEncoder().encode(text)
+  return { mediaType: "text/plain", digest: sha256Digest(bytes), size: bytes.length }
+}
+
+// A pretend registry that serves each text under its own digest.
+function textSource(...texts: string[]): FakeSource {
+  // A Map is a dictionary; new Map() takes a list of [key, value] pairs.
+  const byDigest = new Map(texts.map((text) =&gt; [layerOf(text).digest, text]))
+  // ?? "": an unknown digest gets empty bytes, which won't match its digest.
+  const fetchBlob = vi.fn&lt;BlobSource["fetchBlob"]&gt;(async (_repository, digest) =&gt; chunksOf(byDigest.get(digest) ?? ""))
+  return { source: { fetchBlob }, fetchBlob }
+}
+</code></pre>
+<p><code>layerOf</code> uses Chapter 7’s <code>sha256Digest</code> to compute a real digest, so
+the store accepts the bytes. <code>textSource</code> returns the same <code>FakeSource</code>
+shape as Chapter 7’s <code>helloSource</code>, so a test can still check the calls
+on <code>fetchBlob</code>. A <code>Map</code> is TypeScript’s dictionary, like a Go <code>map</code> or
+a Python <code>dict</code>; <code>get</code> returns <code>undefined</code> for a missing key.</p>
+<p>Add to the imports at the top: <code>sha256Digest</code> from <code>./digest.ts</code>,
+<code>type Descriptor</code> from <code>./manifest.ts</code>, and <code>downloadLayers</code> next to
+<code>downloadLayer</code>.</p>
+<p>Then the first test:</p>
+<pre><code class="language-ts">describe("downloadLayers", () =&gt; {
+  const folder = useTempFolder()
+
+  it("downloads every layer and reports each one", async () =&gt; {
+    const { source } = textSource("one", "two", "three")
+    const store = new ContentStore(folder())
+    const layers = [layerOf("one"), layerOf("two"), layerOf("three")]
+    const onLayer = vi.fn()
+
+    await downloadLayers(source, store, "library/alpine", layers, { onLayer })
+
+    expect(onLayer).toHaveBeenCalledTimes(3)
+    expect(onLayer).toHaveBeenCalledWith(1, layers[1], "downloaded")
+    for (const layer of layers) {
+      expect(await store.has(layer.digest)).toBe(true)
+    }
+  })
+})
+</code></pre>
+<p><code>vi.fn()</code> with nothing inside is a fake function that does nothing and
+records its calls, which is all <code>onLayer</code> needs to be here.</p>
+<blockquote>
+<p><strong>Your turn.</strong> A second test in the same <code>describe</code>: “returns what
+happened to each layer, in the layers’ order”. Serve <code>"one"</code>,
+<code>"two"</code>, <code>"three"</code>. Put <code>"two"</code> in the store first with
+<code>downloadLayer</code>. Then <code>downloadLayers</code> on all three returns
+<code>["downloaded", "cached", "downloaded"]</code>.</p>
+</blockquote>
+<p>Here it is:</p>
+<pre><code class="language-ts">  it("returns what happened to each layer, in the layers' order", async () =&gt; {
+    const { source } = textSource("one", "two", "three")
+    const store = new ContentStore(folder())
+    const layers = [layerOf("one"), layerOf("two"), layerOf("three")]
+    // Put the middle one in the store first.
+    await downloadLayer(source, store, "library/alpine", layerOf("two"))
+
+    expect(await downloadLayers(source, store, "library/alpine", layers)).toEqual(["downloaded", "cached", "downloaded"])
+  })
+</code></pre>
+<p>“In the layers’ order” sounds too obvious to test right now, with one
+loop doing one layer at a time. It won’t be obvious after Step 2.</p>
+<pre><code>$ npm run check
+</code></pre>
+<pre><code> Test Files  8 passed (8)
+      Tests  64 passed (64)
+</code></pre>
+<h2 id="step-2-start-them-all-at-once"><a class="header" href="#step-2-start-them-all-at-once">Step 2: start them all at once</a></h2>
+<p>The loop waits for each download before starting the next, because of
+the <code>await</code> inside it. To run them together, start them all first, and
+wait afterwards.</p>
+<p>In JavaScript, calling an <code>async</code> function starts it right away. The
+call returns a promise at once, and the work carries on in the
+background, like <code>go f()</code> in Go, except you also get something to wait
+on. (Python is different: calling an <code>async def</code> function does
+nothing until you await it or hand it to <code>asyncio.gather</code>.)</p>
+<p>So <code>layers.map(async (layer) =&gt; ...)</code> starts every download and gives
+back a list of promises. <code>Promise.all</code> turns that list into one promise
+that finishes when all of them have, with their results in the same
+order as the list. It’s Python’s <code>asyncio.gather</code>, or a Go
+<code>WaitGroup</code> that also collects the results.</p>
+<p>In <code>downloadLayers</code>, replace everything from <code>const results</code> down to
+<code>return results</code> with:</p>
+<pre><code class="language-ts">  // map starts every download right away and gives back a list of
+  // promises, one per layer. Promise.all waits for all of them and
+  // gives back their results in the same order as the list.
+  return Promise.all(
+    layers.map(async (layer, i) =&gt; {
+      const result = await downloadLayer(source, store, repository, layer)
+      onLayer(i, layer, result)
+      return result
+    }),
+  )
+</code></pre>
+<p>The <code>await</code> is still there, but now it’s inside each layer’s own
+function: each download waits for itself, not for the others.</p>
+<pre><code>$ npm run check
+</code></pre>
+<pre><code> Test Files  8 passed (8)
+      Tests  64 passed (64)
+</code></pre>
+<p>Same tests, still green. Now the real thing (delete the cache first,
+so every layer really downloads):</p>
+<pre><code>$ rm -rf ~/.cache/oci-pull /tmp/oci-nginx
+$ time npm start --silent -- nginx:1.27-alpine /tmp/oci-nginx/rootfs
+</code></pre>
+<pre><code>registry   docker.io
+repository library/nginx
+tag        1.27-alpine
+api        needs a token
+challenge  Bearer realm="https://auth.docker.io/token",service="registry.docker.io"
+platform   linux/amd64
+manifest   sha256:62223d644fa234c3a1cc785ee14242ec47a77364226f1c811d2f669f96dc2ac8
+config     sha256:6769dc3a703c719c1d2756bda113659be28ae16cf0da58dd5fd823d6b9a050ea
+layer 4/8  sha256:d7e5070240863957ebb0b5a44a5729963c3462666baa2947d00628cb5f2d5773  0.0 MB  downloaded
+layer 6/8  sha256:197eb75867ef4fcecd4724f17b0972ab0489436860a594a9445f8eaff8155053  0.0 MB  downloaded
+layer 5/8  sha256:81bd8ed7ec6789b0cb7f1b47ee731c522f6dba83201ec73cd6bca1350f582948  0.0 MB  downloaded
+layer 7/8  sha256:34a64644b756511a2e217f0508e11d1a572085d66cd6dc9a555a082ad49a3102  0.0 MB  downloaded
+layer 3/8  sha256:b464cfdf2a6319875aeb27359ec549790ce14d8214fcb16ef915e4530e5ed235  0.0 MB  downloaded
+layer 2/8  sha256:61ca4f733c802afd9e05a32f0de0361b6d713b8b53292dc15fb093229f648674  1.8 MB  downloaded
+layer 1/8  sha256:f18232174bc91741fdf3da96d85011092101a032a93a388b79e99e69c2d5c870  3.6 MB  downloaded
+layer 8/8  sha256:39c2ddfd6010082a4a646e7ca44e95aca9bf3eaebc00f17f7ccc2954004f2a7d  15.5 MB  downloaded
+unpacked   /tmp/oci-nginx/rootfs
+
+real	0m5.422s
+user	0m0.968s
+sys	0m0.249s
+</code></pre>
+<p>5.4 seconds instead of 7.6. (Network times vary from run to run, so
+yours will differ, but the gap should be there.) Look at the order: the
+small layers finished first and the 15.5 MB one last. That’s why
+<code>onLayer</code> gets the layer’s position: the lines no longer come out in
+order, so each one has to say which layer it’s about. And it’s why
+Step 1’s order test matters: <code>Promise.all</code> keeps the results in the
+list’s order, whatever order the downloads finish in.</p>
+<p>There’s a catch, though. “Start them all” means <em>all</em>. An image with
+50 layers opens 50 connections at once. The registry may take that
+badly, and on a slow line 50 downloads each get a fiftieth of the
+speed, so all of them are slow, and some may time out. Docker itself
+downloads three layers at a time by default (its
+<code>--max-concurrent-downloads</code> setting). We need a limit too.</p>
+<h2 id="step-3-no-more-than-three-at-once"><a class="header" href="#step-3-no-more-than-three-at-once">Step 3: no more than three at once</a></h2>
+<p>This time the test comes first, because it shows the problem for real.
+It needs a way to count how many downloads are running at the same
+time.</p>
+<p>First add the setting to <code>DownloadOptions</code>, above <code>onLayer</code>:</p>
+<pre><code class="language-ts">  // The most layers downloading at the same time (3 if left out).
+  limit?: number
+</code></pre>
+<p>Then, in <code>src/pull.test.ts</code>, a helper above <code>describe("downloadLayers"</code>:</p>
+<pre><code class="language-ts">// Wait `ms` milliseconds. setTimeout calls resolve when the time is up,
+// and that finishes the promise.
+function pause(ms: number): Promise&lt;void&gt; {
+  return new Promise((resolve) =&gt; setTimeout(resolve, ms))
+}
+</code></pre>
+<p><code>setTimeout(fn, ms)</code> calls <code>fn</code> once, after <code>ms</code> milliseconds; it’s the
+callback version of Go’s <code>time.Sleep</code>. Wrapping it in a <code>new Promise</code>
+turns it into something you can <code>await</code>, the same trick <code>promisify</code>
+did for <code>execFile</code> in Chapter 7.</p>
+<p>And the test, at the end of the <code>describe</code>:</p>
+<pre><code class="language-ts">  it("downloads at most `limit` layers at the same time", async () =&gt; {
+    const texts = ["a", "b", "c", "d", "e"]
+    const { source } = textSource(...texts)
+    const store = new ContentStore(folder())
+    let running = 0
+    let most = 0
+    // Wrap the fake to count downloads in progress: from the request
+    // until the last byte, with a short pause so they overlap.
+    const counting: BlobSource = {
+      fetchBlob: async (repository, digest) =&gt; {
+        running += 1
+        most = Math.max(most, running)
+        const chunks = await source.fetchBlob(repository, digest)
+        return (async function* (): AsyncGenerator&lt;Uint8Array&gt; {
+          await pause(5)
+          // yield* passes along every chunk of another stream.
+          yield* chunks
+          running -= 1
+        })()
+      },
+    }
+
+    await downloadLayers(counting, store, "library/alpine", texts.map(layerOf), { limit: 2 })
+
+    expect(most).toBe(2)
+  })
+</code></pre>
+<p><code>counting</code> wraps the fake registry. A download counts as running from
+the moment it’s asked for until its last byte has been read. The
+generator (Chapter 7’s <code>async function*</code>) waits 5 ms before passing on
+the bytes, so the downloads overlap long enough to be counted.
+<code>yield* chunks</code> passes along every chunk of another stream, a short
+way to write <code>for await (const c of chunks) yield c</code>. <code>most</code> records
+the highest count seen.</p>
+<p><code>limit</code> is ignored so far, so this should fail:</p>
+<pre><code>$ npm run check
+</code></pre>
+<pre><code> FAIL  src/pull.test.ts &gt; downloadLayers &gt; downloads at most `limit` layers at the same time
+AssertionError: expected 5 to be 2 // Object.is equality
+
+- Expected
++ Received
+
+- 2
++ 5
+
+ ❯ src/pull.test.ts:118:18
+    116|     await downloadLayers(counting, store, "library/alpine", texts.map(…
+    117|
+    118|     expect(most).toBe(2)
+       |                  ^
+    119|   })
+    120| })
+
+ Test Files  1 failed | 7 passed (8)
+      Tests  1 failed | 64 passed (65)
+</code></pre>
+<p>All five at once, the 50-connection problem in miniature.</p>
+<h3 id="workers-and-a-shared-queue"><a class="header" href="#workers-and-a-shared-queue">Workers and a shared queue</a></h3>
+<p>The fix: start a fixed number of <em>workers</em>, each one a loop that
+downloads one layer at a time. Each worker takes the next layer nobody
+has taken yet, until none are left. With three workers, at most three
+downloads run at once, and a worker that finishes a small layer moves
+straight on to the next one.</p>
+<p>“The next layer nobody has taken” needs a queue the workers share.
+<code>layers.entries()</code> already is one. It returns an <em>iterator</em>: a thing
+that hands out items one at a time and remembers where it’s up to,
+like Python’s <code>iter()</code>. A <code>for...of</code> loop over an iterator takes items
+from it. Run three such loops over the <em>same</em> iterator, and every item
+goes to exactly one of them.</p>
+<p>Replace the <code>return Promise.all(...)</code> with:</p>
+<pre><code class="language-ts">  // new Array(n): a list with n empty slots, filled in as layers finish.
+  const results: LayerResult[] = new Array(layers.length)
+  // One shared queue of [position, layer] pairs. Every worker takes
+  // from the same one, so each layer is taken exactly once.
+  const queue = layers.entries()
+
+  // A worker downloads one layer at a time, taking the next one from
+  // the queue until the queue is empty.
+  async function worker(): Promise&lt;void&gt; {
+    for (const [i, layer] of queue) {
+      const result = await downloadLayer(source, store, repository, layer)
+      results[i] = result
+      onLayer(i, layer, result)
+    }
+  }
+
+  // Start `limit` workers (fewer if there are fewer layers), and wait
+  // until all of them have run out of work.
+  const workers: Promise&lt;void&gt;[] = []
+  for (let n = 0; n &lt; Math.min(limit, layers.length); n += 1) {
+    workers.push(worker())
+  }
+  await Promise.all(workers)
+  return results
+</code></pre>
+<p>And take <code>limit</code> out of the options, with its default, at the top of
+the function:</p>
+<pre><code class="language-ts">  // Take each setting out of options, with a default if it's missing.
+  const { limit = 3, onLayer = () =&gt; {} } = options
+</code></pre>
+<p><code>worker</code> is a function inside a function. Like the generator in
+Chapter 7’s store, it can use the variables around it: <code>queue</code>,
+<code>results</code>, and the parameters. Each call to <code>worker()</code> starts one more
+loop running, and gives back a promise that finishes when that loop
+runs out of layers. <code>Promise.all(workers)</code> waits for every loop.</p>
+<p>Three loops changing <code>results</code> and sharing <code>queue</code>, with no lock? In
+Go you’d need a mutex here. JavaScript runs only one piece of your
+code at a time. It switches between the workers only at an <code>await</code>,
+never halfway through a line. So taking the next item from <code>queue</code>, or
+filling a slot in <code>results</code>, can’t be interrupted by another worker.</p>
+<pre><code>$ npm run check
+</code></pre>
+<pre><code> Test Files  8 passed (8)
+      Tests  65 passed (65)
+</code></pre>
+<h2 id="step-4-try-again"><a class="header" href="#step-4-try-again">Step 4: try again</a></h2>
+<p>A pull of a big image can take minutes. Wi-Fi drops, a server
+restarts, a connection is reset halfway through a layer. One such
+hiccup shouldn’t throw away the whole pull. So when a download fails,
+we wait a moment and try that layer again, a few times, before giving
+up.</p>
+<p>Two details matter:</p>
+<ul>
+<li><strong>Wait longer each time.</strong> If the registry is struggling, a hundred
+clients retrying instantly make it worse. So we wait 1 second, then
+2, then 4: the wait doubles each time. This is called <em>backoff</em>.</li>
+<li><strong>Each try starts fresh.</strong> Chapter 7’s store already deletes the
+<code>.partial</code> file when a download fails, so the next try starts from
+an empty file. We get that for free.</li>
+</ul>
+<p>And one thing once a layer has failed for good: the other workers
+should stop taking new layers. There’s no point in downloading the
+rest of an image we can’t finish.</p>
+<p>Two more settings in <code>DownloadOptions</code>, between <code>limit</code> and <code>onLayer</code>:</p>
+<pre><code class="language-ts">  // How many tries each layer gets before we give up (3 if left out).
+  attempts?: number
+  // How long to wait before the first retry, in milliseconds (1000 if
+  // left out). Each later wait is twice as long as the one before.
+  delayMs?: number
+</code></pre>
+<p>Now the whole function, written inline. It’s the biggest it will get:</p>
+<pre><code class="language-ts">export async function downloadLayers(
+  source: BlobSource,
+  store: ContentStore,
+  repository: string,
+  layers: readonly Descriptor[],
+  options: DownloadOptions = {},
+): Promise&lt;LayerResult[]&gt; {
+  // Take each setting out of options, with a default if it's missing.
+  const { limit = 3, attempts = 3, delayMs = 1000, onLayer = () =&gt; {} } = options
+  // new Array(n): a list with n empty slots, filled in as layers finish.
+  const results: LayerResult[] = new Array(layers.length)
+  // One shared queue of [position, layer] pairs. Every worker takes
+  // from the same one, so each layer is taken exactly once.
+  const queue = layers.entries()
+  // Set when a layer has failed for good, so the others stop.
+  let failed = false
+
+  // A worker downloads one layer at a time, taking the next one from
+  // the queue until the queue is empty.
+  async function worker(): Promise&lt;void&gt; {
+    for (const [i, layer] of queue) {
+      // Another worker gave up: start nothing new.
+      if (failed) {
+        return
+      }
+      let result: LayerResult | undefined
+      // Keep trying until a try works. A failed try is cleaned up by the
+      // store (no .partial left behind), so the next one starts fresh.
+      for (let attempt = 1; result === undefined; attempt += 1) {
+        try {
+          result = await downloadLayer(source, store, repository, layer)
+        } catch (err) {
+          if (attempt === attempts) {
+            failed = true
+            throw err
+          }
+          // Wait delayMs, then 2 × delayMs, then 4 ×, ... (** is "to the power of").
+          await new Promise((resolve) =&gt; setTimeout(resolve, delayMs * 2 ** (attempt - 1)))
+        }
+      }
+      results[i] = result
+      onLayer(i, layer, result)
+    }
+  }
+
+  // Start `limit` workers (fewer if there are fewer layers), and wait
+  // until all of them have run out of work.
+  const workers: Promise&lt;void&gt;[] = []
+  for (let n = 0; n &lt; Math.min(limit, layers.length); n += 1) {
+    workers.push(worker())
+  }
+  await Promise.all(workers)
+  return results
+}
+</code></pre>
+<p>The new part is the inner <code>for</code> loop. <code>result</code> starts as <code>undefined</code>
+and the loop runs until it isn’t. A failed try lands in the <code>catch</code>.
+If that was the last try, it sets <code>failed</code> and throws the error on, so
+<code>Promise.all</code> fails, and so does <code>downloadLayers</code>. Otherwise it waits
+and goes round again. <code>2 ** (attempt - 1)</code> is 1, then 2, then 4
+(<code>**</code> is “to the power of”, like Python’s).</p>
+<p>When the loop ends, the compiler knows <code>result</code> is no longer
+<code>undefined</code>: the loop only stops once <code>result === undefined</code> is false.
+So <code>results[i] = result</code> needs no check.</p>
+<p>Two tests, at the end of the <code>describe</code>. The first:</p>
+<pre><code class="language-ts">  it("tries a failing layer again", async () =&gt; {
+    const { source, fetchBlob } = textSource("one")
+    // The first two tries fail the way fetch does when the network drops.
+    fetchBlob.mockRejectedValueOnce(new TypeError("fetch failed"))
+    fetchBlob.mockRejectedValueOnce(new TypeError("fetch failed"))
+    const store = new ContentStore(folder())
+
+    // delayMs: 1 keeps the test fast; the real waits are a second or more.
+    const results = await downloadLayers(source, store, "library/alpine", [layerOf("one")], { delayMs: 1 })
+
+    expect(results).toEqual(["downloaded"])
+    expect(fetchBlob).toHaveBeenCalledTimes(3)
+  })
+</code></pre>
+<p><code>mockRejectedValueOnce</code> is the failing twin of Chapter 5’s
+<code>mockResolvedValueOnce</code>: the next call returns a promise that fails
+with this error. Two of them, queued up, make the first two calls fail.
+The third call falls back to the normal fake and succeeds.
+<code>TypeError("fetch failed")</code> is what Node’s <code>fetch</code> really throws when
+it can’t reach a server.</p>
+<blockquote>
+<p><strong>Your turn.</strong> The second test, “gives up after <code>attempts</code> tries”: a
+<code>textSource()</code> with no texts whose <code>fetchBlob</code> always fails
+(<code>mockRejectedValue</code>, without <code>Once</code>). With <code>{ attempts: 2, delayMs: 1 }</code>,
+<code>downloadLayers</code> on <code>[layerOf("one")]</code> rejects with <code>"fetch failed"</code>,
+and <code>fetchBlob</code> was called twice.</p>
+</blockquote>
+<p>Here it is:</p>
+<pre><code class="language-ts">  it("gives up after `attempts` tries", async () =&gt; {
+    const { source, fetchBlob } = textSource()
+    fetchBlob.mockRejectedValue(new TypeError("fetch failed"))
+    const store = new ContentStore(folder())
+    const download = downloadLayers(source, store, "library/alpine", [layerOf("one")], { attempts: 2, delayMs: 1 })
+
+    await expect(download).rejects.toThrow("fetch failed")
+    expect(fetchBlob).toHaveBeenCalledTimes(2)
+  })
+</code></pre>
+<pre><code>$ npm run check
+</code></pre>
+<pre><code> Test Files  8 passed (8)
+      Tests  67 passed (67)
+</code></pre>
+<p>It works. Five tests cover <code>downloadLayers</code> from the outside. But read
+the function again: it’s long, and it does four jobs at once:</p>
+<ol>
+<li><strong>What one layer needs:</strong> download it into the store, report it.</li>
+<li><strong>How many at once:</strong> workers, the shared queue, collecting results.</li>
+<li><strong>What to do after a failure:</strong> try again, waiting longer each time.</li>
+<li><strong>When to stop:</strong> the <code>failed</code> flag.</li>
+</ol>
+<p>There are also two things the tests can’t check. The retry test uses
+<code>delayMs: 1</code>, so it never checks that the waits are really 1 second,
+then 2. And nothing tests that the workers stop after a failure. Both
+are hard to test here, because every test of <code>downloadLayers</code> also
+does real disk work in a temp folder. The next two steps fix that.</p>
+<h2 id="step-5-split-out-how-many-at-once"><a class="header" href="#step-5-split-out-how-many-at-once">Step 5: split out “how many at once”</a></h2>
+<p>Jobs 2 and 4, the workers and the <code>failed</code> flag, don’t mention layers
+at all. Swap “layer” for “item” and “download” for “work”, and they’d
+run any list of anything, a few at a time. They also change for
+different reasons than job 1 does. If the registry changes how layers
+are served, job 1 changes. If we want a smarter limit, jobs 2 and 4
+change. That’s the <em>single responsibility principle</em> (the S in SOLID)
+again: one piece of code, one reason to change.</p>
+<p>So jobs 2 and 4 move into a function of their own, in a new file
+<code>src/tasks.ts</code>, that knows nothing about images. It takes a list, a
+limit, and a function to run on each item, and gives back the list of
+results.</p>
+<p>What are the types, though? For <code>downloadLayers</code>, the items are
+<code>Descriptor</code>s and the results are <code>LayerResult</code>s. Another caller could
+pass a list of URLs and get back strings. We want one function that
+works for any item type and any result type, and still checks them.
+That’s a <em>generic</em> function, and you’ve met the idea in Go:</p>
+<pre><code class="language-go">func MapWithLimit[T, R any](items []T, limit int, work func(T, int) R) []R
+</code></pre>
+<p>TypeScript writes the type parameters in angle brackets after the name,
+<code>mapWithLimit&lt;T, R&gt;</code>, and like Go, it works out what <code>T</code> and <code>R</code> are
+from the arguments at each call. Here’s the file:</p>
+<pre><code class="language-ts">// Helpers for running async work. Nothing in here knows about images.
+
+// Run `work` on every item, at most `limit` at the same time. The
+// results come back in the same order as `items`, whatever order the
+// work finishes in. If one fails, nothing new is started and the
+// error is thrown.
+// &lt;T, R&gt; are type parameters: T is the type of an item, R the type of
+// a result. The caller's arguments decide what they are.
+export async function mapWithLimit&lt;T, R&gt;(
+  items: readonly T[],
+  limit: number,
+  work: (item: T, index: number) =&gt; Promise&lt;R&gt;,
+): Promise&lt;R[]&gt; {
+  // new Array(n): a list with n empty slots, filled in as work finishes.
+  const results: R[] = new Array(items.length)
+  // One shared queue of [position, item] pairs. Every worker takes
+  // from the same one, so each item is taken exactly once.
+  const queue = items.entries()
+  // Set when some work has failed, so the workers stop.
+  let failed = false
+
+  // A worker does one item at a time, taking the next one from the
+  // queue until the queue is empty.
+  async function worker(): Promise&lt;void&gt; {
+    for (const [i, item] of queue) {
+      // Another worker failed: start nothing new.
+      if (failed) {
+        return
+      }
+      try {
+        results[i] = await work(item, i)
+      } catch (err) {
+        failed = true
+        throw err
+      }
+    }
+  }
+
+  // Start `limit` workers (fewer if there are fewer items), and wait
+  // until all of them have run out of work.
+  const workers: Promise&lt;void&gt;[] = []
+  for (let n = 0; n &lt; Math.min(limit, items.length); n += 1) {
+    workers.push(worker())
+  }
+  await Promise.all(workers)
+  return results
+}
+</code></pre>
+<p>It’s the worker code from Step 4, with <code>layer</code> renamed <code>item</code> and the
+download swapped for a call to <code>work</code>. One thing moved: <code>failed = true</code>
+used to sit in the retry’s <code>catch</code>. Now it’s in a <code>catch</code> around
+<code>work</code>, so it covers any failure, whatever the work is.</p>
+<p><code>downloadLayers</code> keeps job 1 and job 3, and hands the rest over. Add
+<code>import { mapWithLimit } from "./tasks.ts"</code> to <code>src/pull.ts</code>, then
+replace everything in <code>downloadLayers</code> below the <code>const { limit, ... }</code>
+line with:</p>
+<pre><code class="language-ts">  // mapWithLimit runs the function below on every layer, `limit` at a
+  // time. Here T is Descriptor and R is LayerResult.
+  return mapWithLimit(layers, limit, async (layer, i) =&gt; {
+    let result: LayerResult | undefined
+    // Keep trying until a try works. A failed try is cleaned up by the
+    // store (no .partial left behind), so the next one starts fresh.
+    for (let attempt = 1; result === undefined; attempt += 1) {
+      try {
+        result = await downloadLayer(source, store, repository, layer)
+      } catch (err) {
+        if (attempt === attempts) {
+          throw err
+        }
+        // Wait delayMs, then 2 × delayMs, then 4 ×, ... (** is "to the power of").
+        await new Promise((resolve) =&gt; setTimeout(resolve, delayMs * 2 ** (attempt - 1)))
+      }
+    }
+    onLayer(i, layer, result)
+    return result
+  })
+</code></pre>
+<p>The compiler worked out <code>T</code> from <code>layers</code> (a list of <code>Descriptor</code>) and
+<code>R</code> from what the arrow function returns (<code>LayerResult</code>). So the call
+gives back <code>Promise&lt;LayerResult[]&gt;</code>, exactly what <code>downloadLayers</code>
+promises to return. Return a number from the arrow function by mistake
+and the compiler would say so.</p>
+<p>Now the moment that matters. We haven’t touched a test:</p>
+<pre><code>$ npm run check
+</code></pre>
+<pre><code> Test Files  8 passed (8)
+      Tests  67 passed (67)
+</code></pre>
+<p>All 67 still pass, including the limit test. The tests checked what
+<code>downloadLayers</code> does, not how, so moving the “how” didn’t disturb
+them.</p>
+<h3 id="tests-for-the-helper"><a class="header" href="#tests-for-the-helper">Tests for the helper</a></h3>
+<p><code>mapWithLimit</code> has no disk and no registry, so it’s easy to test on its
+own. The tests need Step 3’s <code>pause</code> helper a second time, in a second
+file. That’s the moment to stop copying it: move it from
+<code>src/pull.test.ts</code> into <code>src/tasks.ts</code>, exported, and call it <code>sleep</code>
+(the next step will use it outside tests too). Put it at the top of
+<code>src/tasks.ts</code>, below the first comment:</p>
+<pre><code class="language-ts">// Wait `ms` milliseconds. setTimeout calls resolve when the time is up,
+// and that finishes the promise.
+export function sleep(ms: number): Promise&lt;void&gt; {
+  return new Promise((resolve) =&gt; setTimeout(resolve, ms))
+}
+</code></pre>
+<p>In <code>src/pull.test.ts</code>, delete <code>pause</code>, add
+<code>import { sleep } from "./tasks.ts"</code>, and change <code>await pause(5)</code> to
+<code>await sleep(5)</code>. That’s the only change to that file, and it’s a
+rename, not a change in what any test checks. This is <em>don’t repeat
+yourself</em> (DRY), applied at the second use, not the first. One copy
+didn’t need sharing. Two copies are where they start to drift apart.</p>
+<p>Now <code>src/tasks.test.ts</code>:</p>
+<pre><code class="language-ts">import { describe, expect, it } from "vitest"
+import { mapWithLimit, sleep } from "./tasks.ts"
+
+describe("mapWithLimit", () =&gt; {
+  it("returns results in the items' order, not the finishing order", async () =&gt; {
+    // The first item takes longest, so it finishes last.
+    const results = await mapWithLimit([30, 20, 10], 3, async (ms) =&gt; {
+      await sleep(ms)
+      return `slept ${ms}`
+    })
+
+    expect(results).toEqual(["slept 30", "slept 20", "slept 10"])
+  })
+
+  it("starts nothing new after a failure", async () =&gt; {
+    const started: string[] = []
+    const work = async (item: string): Promise&lt;string&gt; =&gt; {
+      started.push(item)
+      if (item === "bad") {
+        throw new Error(`${item} failed`)
+      }
+      await sleep(5)
+      return item
+    }
+
+    // Two workers: one takes "slow", the other "bad", which fails at once.
+    await expect(mapWithLimit(["slow", "bad", "c", "d"], 2, work)).rejects.toThrow("bad failed")
+    // Give "slow" time to finish; its worker must not take "c".
+    await sleep(10)
+    expect(started).toEqual(["slow", "bad"])
+  })
+})
+</code></pre>
+<p>In the first test, <code>T</code> is <code>number</code> and <code>R</code> is <code>string</code>. It’s the same
+function <code>downloadLayers</code> uses with <code>Descriptor</code> and <code>LayerResult</code>, and
+it’s checked just as strictly.</p>
+<p>The second test is the one we couldn’t write before. Worker 1 takes
+<code>"slow"</code> and sleeps for 5 ms. Worker 2 takes <code>"bad"</code>, which fails at
+once. When worker 1 wakes up, the <code>failed</code> flag must stop it from
+taking <code>"c"</code>.</p>
+<pre><code>$ npm run check
+</code></pre>
+<pre><code> Test Files  9 passed (9)
+      Tests  69 passed (69)
+</code></pre>
+<p>See it earn its place. In <code>mapWithLimit</code>, delete the three lines of
+<code>if (failed) { return }</code>. The compiler would now complain that
+<code>failed</code> is never read, so run only the tests:</p>
+<pre><code>$ npx vitest run src/tasks.test.ts
+</code></pre>
+<pre><code> FAIL  src/tasks.test.ts &gt; mapWithLimit &gt; starts nothing new after a failure
+AssertionError: expected [ 'slow', 'bad', 'c', 'd' ] to deeply equal [ 'slow', 'bad' ]
+
+- Expected
++ Received
+
+  [
+    "slow",
+    "bad",
++   "c",
++   "d",
+  ]
+
+ ❯ src/tasks.test.ts:30:21
+     28|     // Give "slow" time to finish; its worker must not take "c".
+     29|     await sleep(10)
+     30|     expect(started).toEqual(["slow", "bad"])
+       |                     ^
+     31|   })
+     32| })
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)
+</code></pre>
+<p>(Separator lines trimmed. You may see only <code>'c'</code> added, depending on
+timing.) Without the flag, the surviving worker carries on through the
+rest of the list after the whole call has already failed. In
+<code>downloadLayers</code> that means layers still downloading for an image
+that’s already given up. Put the lines back.</p>
+<h2 id="step-6-split-out-try-again"><a class="header" href="#step-6-split-out-try-again">Step 6: split out “try again”</a></h2>
+<p>What’s left of the retry loop is the other job that knows nothing
+about layers: “call this until it works, at most N times, waiting
+longer each time.” It’s also the part we couldn’t test properly, so
+it’s the next thing to move out.</p>
+<blockquote>
+<p><strong>Your turn.</strong> Add <code>retry</code> to <code>src/tasks.ts</code>, below <code>mapWithLimit</code>.
+It’s generic in one type, <code>T</code>: it takes <code>attempt</code>, a function with no
+arguments that returns <code>Promise&lt;T&gt;</code>, plus <code>attempts</code> and <code>delayMs</code>,
+and returns <code>Promise&lt;T&gt;</code>. Use Step 5’s loop, but <code>return</code> the result
+of the first try that works, and use <code>sleep</code> for the waiting.</p>
+</blockquote>
+<p>Here it is:</p>
+<pre><code class="language-ts">// Call `attempt` until it works, at most `attempts` times. Between
+// tries, wait delayMs, then twice that, then 4 times, and so on. If
+// the last try fails too, its error is thrown.
+export async function retry&lt;T&gt;(attempt: () =&gt; Promise&lt;T&gt;, attempts: number, delayMs: number): Promise&lt;T&gt; {
+  for (let n = 1; ; n += 1) {
+    try {
+      // `return await`, not `return`: the await makes a failure land in
+      // the catch below. A plain `return` hands the promise back unchecked.
+      return await attempt()
+    } catch (err) {
+      if (n === attempts) {
+        throw err
+      }
+      // ** is "to the power of": delayMs × 1, × 2, × 4, ...
+      await sleep(delayMs * 2 ** (n - 1))
+    }
+  }
+}
+</code></pre>
+<p><code>for (let n = 1; ; n += 1)</code> has no condition, so it loops until a
+<code>return</code> or a <code>throw</code> gets out. The compiler can see that, so it
+doesn’t complain that the function might end without returning.</p>
+<p><strong><code>return await</code></strong> looks like a word too many, and in most places it
+is. Inside a <code>try</code>, it isn’t. <code>attempt()</code> gives back a promise.
+<code>await</code> waits for it here, so if it fails, the failure happens inside
+the <code>try</code> and the <code>catch</code> sees it. A plain <code>return attempt()</code> hands the
+unfinished promise straight to the caller. When it fails later, this
+function has already returned, and the <code>catch</code> never runs. We’ll prove
+it in a moment.</p>
+<p>Now <code>downloadLayers</code> shrinks to the one job that’s really about
+layers. Import <code>retry</code> next to <code>mapWithLimit</code>, and replace the body of
+the arrow function:</p>
+<pre><code class="language-ts">  return mapWithLimit(layers, limit, async (layer, i) =&gt; {
+    // retry tries again after a failure. A failed try is cleaned up by
+    // the store (no .partial left behind), so each try starts fresh.
+    const result = await retry(() =&gt; downloadLayer(source, store, repository, layer), attempts, delayMs)
+    onLayer(i, layer, result)
+    return result
+  })
+</code></pre>
+<p><code>() =&gt; downloadLayer(...)</code> wraps the download in a function with no
+arguments, so <code>retry</code> can call it as many times as it needs. Passing
+<code>downloadLayer(...)</code> itself would start one download, once, and hand
+<code>retry</code> a promise it couldn’t restart. Here <code>T</code> is <code>LayerResult</code>, from
+what <code>downloadLayer</code> returns.</p>
+<p>The whole function is now this:</p>
+<pre><code class="language-ts">export async function downloadLayers(
+  source: BlobSource,
+  store: ContentStore,
+  repository: string,
+  layers: readonly Descriptor[],
+  options: DownloadOptions = {},
+): Promise&lt;LayerResult[]&gt; {
+  // Take each setting out of options, with a default if it's missing.
+  const { limit = 3, attempts = 3, delayMs = 1000, onLayer = () =&gt; {} } = options
+  // mapWithLimit runs the function below on every layer, `limit` at a
+  // time. Here T is Descriptor and R is LayerResult.
+  return mapWithLimit(layers, limit, async (layer, i) =&gt; {
+    // retry tries again after a failure. A failed try is cleaned up by
+    // the store (no .partial left behind), so each try starts fresh.
+    const result = await retry(() =&gt; downloadLayer(source, store, repository, layer), attempts, delayMs)
+    onLayer(i, layer, result)
+    return result
+  })
+}
+</code></pre>
+<p>It reads like the sentence you’d use to describe it: for every layer,
+<code>limit</code> at a time, retry the download, then report it.</p>
+<pre><code>$ npm run check
+</code></pre>
+<pre><code> Test Files  9 passed (9)
+      Tests  69 passed (69)
+</code></pre>
+<p>Still 69, still no test changed.</p>
+<h3 id="faking-the-clock"><a class="header" href="#faking-the-clock">Faking the clock</a></h3>
+<p>Now the test Step 4 couldn’t write: that <code>retry</code> really waits 1 second,
+then 2. Waiting for real would make every test run take seconds. And a
+test that passes because “enough time went by” is fragile.</p>
+<p>Vitest can replace the clock. After <code>vi.useFakeTimers()</code>, <code>setTimeout</code>
+no longer fires by itself. Time stands still until the test moves it
+forward with <code>vi.advanceTimersByTimeAsync(ms)</code>. Any timer due in that
+time fires then, and the code waiting on it runs. A test can then say
+“at 999 ms nothing has happened yet; at 1000 ms the second try has
+started”, and it runs in a millisecond. That’s the same idea as the
+fake registry, applied to time: replace the thing you can’t control
+with one you can.</p>
+<p>Add to <code>src/tasks.test.ts</code> (and add <code>afterEach</code>, <code>beforeEach</code>, <code>vi</code> and
+<code>retry</code> to its imports):</p>
+<pre><code class="language-ts">describe("retry", () =&gt; {
+  // A fake clock: setTimeout no longer waits by itself. Time moves only
+  // when the test moves it, so "wait 2 seconds" takes no time at all.
+  beforeEach(() =&gt; {
+    vi.useFakeTimers()
+  })
+  afterEach(() =&gt; {
+    vi.useRealTimers()
+  })
+
+  it("waits 1 second, then 2, between tries", async () =&gt; {
+    const attempt = vi.fn&lt;() =&gt; Promise&lt;string&gt;&gt;()
+    attempt.mockRejectedValueOnce(new Error("first"))
+    attempt.mockRejectedValueOnce(new Error("second"))
+    attempt.mockResolvedValueOnce("worked")
+
+    const result = retry(attempt, 3, 1000)
+    // The first try happens at once.
+    expect(attempt).toHaveBeenCalledTimes(1)
+
+    // Move the clock forward. The Async version also lets the code
+    // that was waiting run, up to its next wait.
+    await vi.advanceTimersByTimeAsync(999)
+    expect(attempt).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(attempt).toHaveBeenCalledTimes(2)
+
+    // The second wait is twice as long.
+    await vi.advanceTimersByTimeAsync(1999)
+    expect(attempt).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(await result).toBe("worked")
+  })
+})
+</code></pre>
+<p><code>afterEach</code> puts the real clock back, so other tests aren’t affected.
+<code>const result = retry(...)</code>, with no <code>await</code>, starts <code>retry</code> and keeps
+its promise for later, as in Step 2. Between moves of the clock, the
+test checks how many tries there have been.</p>
+<p>Why <code>advanceTimersByTimeAsync</code> and not the plain
+<code>advanceTimersByTime</code>? When the timer fires, <code>retry</code> still has to wake
+up from its <code>await</code> and call <code>attempt</code> again. Those steps are queued to
+run “as soon as the current code finishes”. The <code>Async</code> version waits
+for them too, so by the time the next line runs, the second try has
+really happened.</p>
+<blockquote>
+<p><strong>Your turn.</strong> A second test in <code>describe("retry")</code>: “throws the last
+error when every try fails”. An <code>attempt</code> that fails twice, with
+<code>"first"</code> then <code>"second"</code>. <code>retry(attempt, 2, 1000)</code> rejects with
+<code>"second"</code>, and <code>attempt</code> was called twice. One catch: start the
+<code>expect(...).rejects</code> check <em>before</em> moving the clock, and <code>await</code> it
+afterwards.</p>
+</blockquote>
+<p>Here it is:</p>
+<pre><code class="language-ts">  it("throws the last error when every try fails", async () =&gt; {
+    const attempt = vi.fn&lt;() =&gt; Promise&lt;string&gt;&gt;()
+    attempt.mockRejectedValueOnce(new Error("first"))
+    attempt.mockRejectedValueOnce(new Error("second"))
+
+    // Start checking for the error before moving the clock, so the
+    // failure has somewhere to go the moment it happens.
+    const check = expect(retry(attempt, 2, 1000)).rejects.toThrow("second")
+    await vi.advanceTimersByTimeAsync(1000)
+    await check
+    expect(attempt).toHaveBeenCalledTimes(2)
+  })
+</code></pre>
+<p>Why the check first? <code>retry</code> fails while the clock is moving. If
+nothing is listening for that failure yet, Node reports it as an
+<em>unhandled rejection</em>, a failure nobody caught, and Vitest flags it as
+an error even though the test catches it a moment later.</p>
+<pre><code>$ npm run check
+</code></pre>
+<pre><code> Test Files  9 passed (9)
+      Tests  71 passed (71)
+</code></pre>
+<p>Now the promised proof about <code>return await</code>. In <code>retry</code>, change
+<code>return await attempt()</code> to <code>return attempt()</code>, then:</p>
+<pre><code>$ npx vitest run src/tasks.test.ts
+</code></pre>
+<pre><code> FAIL  src/tasks.test.ts &gt; retry &gt; waits 1 second, then 2, between tries
+AssertionError: expected "vi.fn()" to be called 2 times, but got 1 times
+ ❯ src/tasks.test.ts:59:21
+
+ FAIL  src/tasks.test.ts &gt; retry &gt; throws the last error when every try fails
+AssertionError: expected [Function] to throw error including 'second' but got 'first'
+
+Expected: "second"
+Received: "first"
+
+ ❯ src/tasks.test.ts:75:50
+</code></pre>
+<p>(Trimmed; Vitest also lists two unhandled rejections of <code>Error: first</code>.)
+Without the <code>await</code>, the first failure skipped the <code>catch</code> entirely.
+There was no retry: the error from the first try went straight to the
+caller. The code looks almost the same, but it never retries. Put the
+<code>await</code> back.</p>
+<h2 id="step-7-the-same-idea-back-in-chapter-6"><a class="header" href="#step-7-the-same-idea-back-in-chapter-6">Step 7: the same idea, back in Chapter 6</a></h2>
+<p>Generic functions fix something we left behind on purpose. Chapter 6’s
+<code>parseManifest</code> has the same four lines twice, once per schema:</p>
+<pre><code class="language-ts">    const result = ImageIndexSchema.safeParse(json)
+    if (!result.success) {
+      throw invalid(mediaType, result.error)
+    }
+    return { kind: "index", index: result.data }
+</code></pre>
+<p>and again with <code>ImageManifestSchema</code>. We couldn’t share them then: the
+two results have different types (<code>ImageIndex</code> and <code>ImageManifest</code>), so
+one function would have needed a type that covers both of them, and
+we’d have lost the checking. A generic function handles both: “give me
+a schema whose data has type <code>T</code>, and I’ll give you back a <code>T</code>.”</p>
+<p>zod has a name for “a schema whose checked data has type <code>T</code>”:
+<code>z.ZodType&lt;T&gt;</code>.</p>
+<blockquote>
+<p><strong>Your turn.</strong> In <code>src/manifest.ts</code>, above <code>parseManifest</code>, write
+<code>parseWith&lt;T&gt;(schema: z.ZodType&lt;T&gt;, mediaType: string, json: unknown): T</code>,
+holding the <code>safeParse</code> lines once. Then make each branch of
+<code>parseManifest</code> a single <code>return</code> that calls it.</p>
+</blockquote>
+<p>Here it is:</p>
+<pre><code class="language-ts">// Check `json` against any schema and return the checked data.
+// z.ZodType&lt;T&gt; means "a schema whose checked data has type T", so the
+// result's type comes from whichever schema is passed in.
+function parseWith&lt;T&gt;(schema: z.ZodType&lt;T&gt;, mediaType: string, json: unknown): T {
+  // safeParse never throws. It returns { success: true, data } or
+  // { success: false, error }; checking `success` tells the compiler which.
+  const result = schema.safeParse(json)
+  if (!result.success) {
+    throw invalid(mediaType, result.error)
+  }
+  return result.data
+}
+
+export function parseManifest(mediaType: string, bytes: Uint8Array): Manifest {
+  const json = parseJson(bytes)
+
+  if (INDEX_TYPES.includes(mediaType)) {
+    // Here T is ImageIndex.
+    return { kind: "index", index: parseWith(ImageIndexSchema, mediaType, json) }
+  }
+  if (IMAGE_TYPES.includes(mediaType)) {
+    // And here T is ImageManifest.
+    return { kind: "image", manifest: parseWith(ImageManifestSchema, mediaType, json) }
+  }
+  throw new ManifestError(`unsupported media type "${mediaType}"`)
+}
+</code></pre>
+<pre><code>$ npm run check
+</code></pre>
+<pre><code> Test Files  9 passed (9)
+      Tests  71 passed (71)
+</code></pre>
+<p>Chapter 6’s tests pass unchanged. Is the checking really still there?
+Swap the schemas on purpose: give the index branch
+<code>ImageManifestSchema</code>.</p>
+<pre><code>$ npm run typecheck
+</code></pre>
+<pre><code>src/manifest.ts(114,29): error TS2741: Property 'manifests' is missing in type '{ schemaVersion: 2; config: { mediaType: string; digest: string; size: number; }; layers: { mediaType: string; digest: string; size: number; }[]; }' but required in type '{ schemaVersion: 2; manifests: { mediaType: string; digest: string; size: number; platform?: { os: string; architecture: string; variant?: string | undefined; } | undefined; }[]; }'.
+</code></pre>
+<p>Long, but read it as: “you gave me something with <code>config</code> and
+<code>layers</code> where an index (with <code>manifests</code>) belongs.” <code>T</code> came from the
+schema, so the wrong schema gives the wrong type, and the compiler
+catches it. Put <code>ImageIndexSchema</code> back.</p>
+<h2 id="try-it-4"><a class="header" href="#try-it-4">Try it</a></h2>
+<pre><code>$ rm -rf ~/.cache/oci-pull /tmp/oci-nginx
+$ time npm start --silent -- nginx:1.27-alpine /tmp/oci-nginx/rootfs
+</code></pre>
+<pre><code>registry   docker.io
+repository library/nginx
+tag        1.27-alpine
+api        needs a token
+challenge  Bearer realm="https://auth.docker.io/token",service="registry.docker.io"
+platform   linux/amd64
+manifest   sha256:62223d644fa234c3a1cc785ee14242ec47a77364226f1c811d2f669f96dc2ac8
+config     sha256:6769dc3a703c719c1d2756bda113659be28ae16cf0da58dd5fd823d6b9a050ea
+layer 3/8  sha256:b464cfdf2a6319875aeb27359ec549790ce14d8214fcb16ef915e4530e5ed235  0.0 MB  downloaded
+layer 2/8  sha256:61ca4f733c802afd9e05a32f0de0361b6d713b8b53292dc15fb093229f648674  1.8 MB  downloaded
+layer 4/8  sha256:d7e5070240863957ebb0b5a44a5729963c3462666baa2947d00628cb5f2d5773  0.0 MB  downloaded
+layer 5/8  sha256:81bd8ed7ec6789b0cb7f1b47ee731c522f6dba83201ec73cd6bca1350f582948  0.0 MB  downloaded
+layer 6/8  sha256:197eb75867ef4fcecd4724f17b0972ab0489436860a594a9445f8eaff8155053  0.0 MB  downloaded
+layer 1/8  sha256:f18232174bc91741fdf3da96d85011092101a032a93a388b79e99e69c2d5c870  3.6 MB  downloaded
+layer 7/8  sha256:34a64644b756511a2e217f0508e11d1a572085d66cd6dc9a555a082ad49a3102  0.0 MB  downloaded
+layer 8/8  sha256:39c2ddfd6010082a4a646e7ca44e95aca9bf3eaebc00f17f7ccc2954004f2a7d  15.5 MB  downloaded
+unpacked   /tmp/oci-nginx/rootfs
+
+real	0m4.948s
+user	0m0.948s
+sys	0m0.250s
+</code></pre>
+<p>7.6 seconds in Chapter 7, 4.9 now, three at a time. Three at a time
+was no slower than all eight at once (5.4 seconds in Step 2): most of
+the waiting was the round trips before each download, and three
+workers working through the queue overlap those well enough. Watch the
+order: layers 1, 2 and 3 start first. Layer 3 is tiny, so its worker
+moves on to 4, then 5, then 6, while layer 1 is still arriving.</p>
+<p>Run it again, with the cache full:</p>
+<pre><code>$ rm -rf /tmp/oci-nginx
+$ time npm start --silent -- nginx:1.27-alpine /tmp/oci-nginx/rootfs
+</code></pre>
+<pre><code>layer 1/8  sha256:f18232174bc91741fdf3da96d85011092101a032a93a388b79e99e69c2d5c870  3.6 MB  cached
+layer 3/8  sha256:b464cfdf2a6319875aeb27359ec549790ce14d8214fcb16ef915e4530e5ed235  0.0 MB  cached
+layer 2/8  sha256:61ca4f733c802afd9e05a32f0de0361b6d713b8b53292dc15fb093229f648674  1.8 MB  cached
+layer 4/8  sha256:d7e5070240863957ebb0b5a44a5729963c3462666baa2947d00628cb5f2d5773  0.0 MB  cached
+layer 5/8  sha256:81bd8ed7ec6789b0cb7f1b47ee731c522f6dba83201ec73cd6bca1350f582948  0.0 MB  cached
+layer 6/8  sha256:197eb75867ef4fcecd4724f17b0972ab0489436860a594a9445f8eaff8155053  0.0 MB  cached
+layer 7/8  sha256:34a64644b756511a2e217f0508e11d1a572085d66cd6dc9a555a082ad49a3102  0.0 MB  cached
+layer 8/8  sha256:39c2ddfd6010082a4a646e7ca44e95aca9bf3eaebc00f17f7ccc2954004f2a7d  15.5 MB  cached
+unpacked   /tmp/oci-nginx/rootfs
+
+real	0m2.470s
+user	0m0.555s
+sys	0m0.142s
+</code></pre>
+<p>(The lines above <code>layer</code> are the same as before.) Even “cached” comes
+out in a slightly shuffled order now: checking the store is a disk
+operation, and three of them run at once.</p>
+<h2 id="what-this-chapter-doesnt-do-3"><a class="header" href="#what-this-chapter-doesnt-do-3">What this chapter doesn’t do</a></h2>
+<ul>
+<li><strong>Stop downloads already running when one fails.</strong> The <code>failed</code> flag
+stops new layers from starting, but the two other workers finish the
+layer they’re on before the program exits. Stopping a download
+midway needs a way to tell <code>fetch</code> to give up
+(<code>AbortController</code>), passed down through <code>fetchBlob</code> and the HTTP
+client. Chapter 12 does that.</li>
+<li><strong>Tell a hopeless error from a passing one.</strong> We retry every
+failure, including a <code>404</code> that will never succeed, so a missing
+layer costs three tries and three seconds before the error. Chapter
+12 sorts errors into “try again” and “give up now.”</li>
+<li><strong>Resume a broken download.</strong> A retry starts the layer from byte
+zero, as Chapter 7’s did.</li>
+<li><strong>Show progress within a layer.</strong> A 500 MB layer prints nothing until
+it’s done.</li>
+</ul>
+<h2 id="commit-6"><a class="header" href="#commit-6">Commit</a></h2>
+<pre><code>$ npm run check
+$ git add -A
+$ git commit -m "Download layers at the same time, with a limit and retries"
+</code></pre>
+<h2 id="what-you-should-now-be-able-to-answer-8"><a class="header" href="#what-you-should-now-be-able-to-answer-8">What you should now be able to answer</a></h2>
+<p>Try to answer each one in your own words first. Then open the answer
+to check.</p>
+<p><strong>1. Why did nginx’s 0.0 MB layers take time to download in Chapter 7?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Each download costs a few round trips before the first byte: ask the
+registry, get redirected to the download server, connect there. That
+costs the same for a tiny layer as for a big one. Done one after
+another, those waits add up; done together, they overlap.</p>
+</details>
+<p><strong>2. What happens when you call an <code>async</code> function without <code>await</code>?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>It starts running right away and gives back a promise. The work
+carries on while your code continues, and <code>await</code> (or <code>Promise.all</code>)
+waits for it later. That’s how Step 2 started every download at once.
+Python is different: an <code>async def</code> call does nothing until it’s
+awaited or scheduled.</p>
+</details>
+<p><strong>3. The layers finish in any order. How do the results and the progress lines stay straight?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>The results go into the slot for each layer’s position (<code>results[i]</code>),
+so the returned list is in the layers’ order, as <code>Promise.all</code> keeps
+its list in order. The progress lines print in finishing order, so
+<code>onLayer</code> is given the layer’s position and the layer itself, and
+each line says which layer it’s about.</p>
+</details>
+<p><strong>4. Why not download every layer at once, and why three?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>An image can have 50 layers. 50 connections at once can upset the
+registry, and on a slow line each gets a fiftieth of the speed, so
+they’re all slow and some time out. Three is what Docker uses by
+default. In our nginx run it was no slower than all eight at once.</p>
+</details>
+<p><strong>5. How do three workers share the layers without taking the same one twice, and why is no lock needed?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>They all loop over one shared iterator from <code>entries()</code>, which hands
+out each item once and remembers where it’s up to. JavaScript runs one
+piece of your code at a time and only switches at an <code>await</code>, so
+taking an item or filling a result slot can’t be interrupted halfway.
+In Go, the same sharing would need a mutex or a channel.</p>
+</details>
+<p><strong>6. Why does a retry wait longer each time, and why can it start the layer from scratch safely?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>If the registry is struggling, instant retries from many clients make
+it worse; doubling the wait (1 s, 2 s, 4 s) gives it room. Starting
+over is safe because Chapter 7’s store deletes the <code>.partial</code> file
+when a download fails, so the next try writes a fresh file.</p>
+</details>
+<p><strong>7. What is a generic function? What were <code>T</code> and <code>R</code> when <code>downloadLayers</code> called <code>mapWithLimit</code>?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>A function with type parameters, written in angle brackets
+(<code>mapWithLimit&lt;T, R&gt;</code>), so it works for any types while still checking
+them, like Go’s <code>[T, R any]</code>. The compiler works them out from the
+arguments: <code>T</code> was <code>Descriptor</code> (from <code>layers</code>) and <code>R</code> was
+<code>LayerResult</code> (from what the arrow function returns).</p>
+</details>
+<p><strong>8. Why <code>return await attempt()</code> inside <code>retry</code>’s <code>try</code>, and not <code>return attempt()</code>?</strong></p>
+<details>
+<summary>Answer</summary>
+<p><code>await</code> makes the failure happen inside the <code>try</code>, so the <code>catch</code> sees
+it and retries. A plain <code>return</code> hands back the unfinished promise; it
+fails after the function has already returned, so the <code>catch</code> never
+runs and there’s no retry. The tests showed it: the error from the
+first try went straight to the caller.</p>
+</details>
+<p><strong>9. What does a fake clock do, and why was <code>retry</code> easy to test with it while <code>downloadLayers</code> wasn’t?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>After <code>vi.useFakeTimers()</code>, timers only fire when the test moves time
+forward with <code>vi.advanceTimersByTimeAsync</code>. So “wait 2 seconds” takes
+no time, and the test can check what happened at 999 ms and at
+1000 ms. <code>retry</code> does nothing but call a function and wait. Every test
+of <code>downloadLayers</code> also does real disk work, which the fake clock
+doesn’t control, so its retry tests could only use a tiny real delay.</p>
+</details>
+<p><strong>10. We wrote <code>downloadLayers</code> whole, then split it. How did we know each split didn’t break anything?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>The tests from steps 1 to 4 only check what <code>downloadLayers</code> does from
+the outside: what it returns, what it reports, what ends up in the
+store. They never mention a helper, so they had to pass unchanged after
+each split, and they did (67, then 69 with the new helper tests, then
+71). Tests for the helpers came after each split.</p>
+</details>
+<p><strong>11. How does <code>parseWith</code> know what type to return, and what happened when it was given the wrong schema?</strong></p>
+<details>
+<summary>Answer</summary>
+<p>Its parameter is <code>z.ZodType&lt;T&gt;</code>, “a schema whose checked data has type
+<code>T</code>”, so <code>T</code> comes from the schema passed in: <code>ImageIndex</code> or
+<code>ImageManifest</code>. Given the manifest schema where an index belongs, the
+compiler refused: the result had <code>config</code> and <code>layers</code> but no
+<code>manifests</code>.</p>
+</details>
+<h2 id="next-chapter-8"><a class="header" href="#next-chapter-8">Next chapter</a></h2>
+<p>The downloads are fast now, and they recover from a dropped
+connection. The other shortcut is still there: the system’s <code>tar</code>
+command unpacks the layers. A layer can delete a file that an earlier
+layer added. It does this by including an empty file named
+<code>.wh.&lt;name&gt;</code>, a “whiteout”, and <code>tar</code> knows nothing about that. It
+unpacks the marker as an ordinary file, and the deleted file stays.
+Chapter 9 replaces <code>tar</code> with our own unpacking code, built on the
+<code>tar</code> package, that applies layers in order, honors whiteouts, and is
+tested against a real temporary folder.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="unpacking-layers-into-a-folder"><a class="header" href="#unpacking-layers-into-a-folder">Unpacking Layers into a Folder</a></h1>
 <div style="break-before: page; page-break-before: always;"></div>
@@ -7161,6 +8443,22 @@ a millisecond.</p>
         <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
         <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
 
+        <!-- Livereload script (if served using the cli tool) -->
+        <script>
+            const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsAddress = wsProtocol + "//" + location.host + "/" + "__livereload";
+            const socket = new WebSocket(wsAddress);
+            socket.onmessage = function (event) {
+                if (event.data === "reload") {
+                    socket.close();
+                    location.reload();
+                }
+            };
+
+            window.onbeforeunload = function() {
+                socket.close();
+            }
+        </script>
 
 
         <script>
