@@ -7,7 +7,7 @@ import { RegistryClient, RegistryError, type ApiCheck } from "./registry.ts"
 import { resolveImage, type ResolvedImage } from "./resolve.ts"
 import { ContentStore, StoreError } from "./store.ts"
 import { homedir } from "os"
-import { downloadLayer } from "./pull.ts"
+import { downloadLayers } from "./pull.ts"
 import { unpackWithSystemTar } from "./unpack.ts"
 
 export function useage(): string {
@@ -87,10 +87,11 @@ export async function main(argv: string[]): Promise<number> {
     const { layers } = resolved.manifest
     // ROUGH: one layer at a time. Chapter 8 downloads them all at once.
     // entries() gives [position, item] pairs, like enumerate() in Python.
-    for (const [i, layer] of layers.entries()) {
-      const result = await downloadLayer(registry, store, ref.repository, layer)
-      console.log(`layer ${i + 1}/${layers.length}  ${layer.digest}  ${megabytes(layer.size)}  ${result}`)
-    }
+    await downloadLayers(registry, store, ref.repository, layers, {
+      onLayer: (i, layer, result) => {
+        console.log(`layer ${i + 1}/${layers.length}  ${layer.digest}  ${megabytes(layer.size)}  ${result}`)
+      }
+    })
 
     // Unpack in order: each layer goes on top of the ones before it.
     for (const layer of layers) {

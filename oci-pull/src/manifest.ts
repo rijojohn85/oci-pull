@@ -73,24 +73,30 @@ function invalid(mediaType: string, error: z.ZodError): ManifestError {
   return new ManifestError(`not a valid ${mediaType}\n${z.prettifyError(error)}`)
 }
 
+// Check `json` against any schema and return the checked data.
+// z.ZodType<T> means "a schema whose checked data has type T", so the
+// result's type comes from whichever schema is passed in.
+function parseWith<T>(schema: z.ZodType<T>, mediaType: string, json: unknown): T {
+  // safeParse never throws. It returns { success: true, data } or
+  // { success: false, error }; checking `success` tells the compiler which.
+  const result = schema.safeParse(json)
+  if (!result.success) {
+    throw invalid(mediaType, result.error)
+  }
+  return result.data
+}
+
 export function parseManifest(mediaType: string, bytes: Uint8Array): Manifest {
   const json = parseJson(bytes)
 
   if (INDEX_TYPES.includes(mediaType)) {
-    const result = ImageIndexSchema.safeParse(json)
-    if (!result.success) {
-      throw invalid(mediaType, result.error)
-    }
-    return { kind: "index", index: result.data }
+    // Here T is ImageIndex.
+    return { kind: "index", index: parseWith(ImageIndexSchema, mediaType, json) }
   }
   if (IMAGE_TYPES.includes(mediaType)) {
-    const result = ImageManifestSchema.safeParse(json)
-    if (!result.success) {
-      throw invalid(mediaType, result.error)
-    }
-    return { kind: "image", manifest: result.data }
+    // And here T is ImageManifest.
+    return { kind: "image", manifest: parseWith(ImageManifestSchema, mediaType, json) }
   }
-
   throw new ManifestError(`unsupported media type "${mediaType}"`)
 }
 
