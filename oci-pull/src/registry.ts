@@ -74,6 +74,14 @@ export class RegistryClient {
       bytes: new Uint8Array(await response.arrayBuffer()),
     }
   }
+  async fetchBlob(repository: string, digest: string): Promise<AsyncIterable<Uint8Array>> {
+    const url = `${this.baseURL}${repository}/blobs/${digest}`
+    const response = await this.authorizedGet(url, `repository:${repository}:pull`, {})
+    if (response.status !== 200 || response.body === null) {
+      throw new RegistryError(url, response.status, "unexpected status")
+    }
+    return response.body
+  }
   private withToken(headers: RequestHeaders): RequestHeaders {
     if (this.token === undefined) {
       return headers

@@ -139,3 +139,40 @@ describe("RegistryClient.fetchManifest", () => {
   })
 })
 
+// Read a whole stream into one string. Fine in a test, where it's tiny.
+async function textOf(chunks: AsyncIterable<Uint8Array>): Promise<string> {
+  let text = ""
+  // TextDecoder with { stream: true } copes with a character split across chunks.
+  const decoder = new TextDecoder()
+  for await (const chunk of chunks) {
+    text += decoder.decode(chunk, { stream: true })
+  }
+  return text + decoder.decode()
+}
+describe("RegistryClient.fetchBlob", () => {
+  it("streams the blob, getting a token first if asked", async () => {
+    // A 401 first, then the blob: the same dance as for a manifest.
+    const { http, get } = replyingInTurn(unauthorized(), new Response("hello"))
+    const client = new RegistryClient(http, "docker.io", tokenGiving("abc"))
+
+    const chunks = await client.fetchBlob("library/alpine", "sha256:2cf24dba")
+
+    expect(await textOf(chunks)).toBe("hello")
+    expect(get).toHaveBeenNthCalledWith(
+      2,
+      "https://registry-1.docker.io/v2/library/alpine/blobs/sha256:2cf24dba",
+      expect.objectContaining({ authorization: "Bearer abc" }),
+    )
+  })
+  it("throws RegistryError when the blob isn't there", async () => {
+    const { http } = replyingWith(new Response(null, { status: 404 }))
+
+    // An async failure: await the expect, or the test ends too early.
+    await expect(new RegistryClient(http, "ghcr.io", neverAuth).fetchBlob("x/y", "sha256:2cf24dba")).rejects.toThrow(
+      RegistryError,
+    )
+  })
+})
+
+
+

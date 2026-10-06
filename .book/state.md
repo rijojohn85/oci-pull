@@ -110,6 +110,7 @@ wins: fix this file.
 - (none)
 
 ## Decisions after planning
+- 2026-10-06: from Ch8 on, "write it whole, then split it" (see AGENTS.md). Ch7 stays as written; Ch8 can open by splitting pullImage() out of main.ts.
 
 - 2026-10-05: keeping the "why" visible. User picked: map at the top of
   every chapter, open on the gap (real output), why paragraph + "By the end

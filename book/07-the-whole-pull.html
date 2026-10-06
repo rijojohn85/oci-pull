@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-941a26d0.js";
+            window.path_to_searchindex_js = "searchindex-5015955c.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-f5958a6c.js"></script>
@@ -431,6 +431,9 @@ export class StoreError extends Error {
   }
 }
 
+// "sha256:" then 64 hex characters: the only digests the store accepts.
+const SHA256_DIGEST = /^sha256:[0-9a-f]{64}$/
+
 // A folder of files, each named after the sha256 of its own bytes.
 // Its one job: keep a file only if its bytes match its name.
 export class ContentStore {
@@ -442,8 +445,9 @@ export class ContentStore {
 
   // Where a blob lives: &lt;root&gt;/sha256/&lt;hex&gt;.
   pathFor(digest: string): string {
-    // Only sha256 is supported; anything else is refused, not guessed.
-    if (!digest.startsWith("sha256:")) {
+    // Only "sha256:" plus exactly 64 lowercase hex characters. Anything
+    // else (sha512, "../", a "/") is refused, so a name can't escape the folder.
+    if (!SHA256_DIGEST.test(digest)) {
       throw new StoreError(`unsupported digest ${digest}`)
     }
     return join(this.root, "sha256", digest.slice("sha256:".length))
@@ -465,10 +469,12 @@ is one area of the standard library, like Go’s <code>crypto/sha256</code>, <co
 and <code>path/filepath</code>. <code>node:fs/promises</code> holds the file functions that
 return Promises, so you can <code>await</code> them. <code>join</code> builds a path with the
 right separators, like <code>filepath.Join</code>.</p>
-<p>The digest’s format was already checked by zod in Chapter 6, so by now
-it can’t contain a <code>/</code> or <code>..</code>. But <code>DIGEST_PATTERN</code> allows other hash
-algorithms (<code>sha512:</code>), and we only compute sha256. So <code>pathFor</code>
-refuses the others instead of storing them under a name it can’t check.</p>
+<p>The digest goes straight into a file path, so <code>pathFor</code> checks it
+itself. zod already checked it in Chapter 6, but the store can’t know
+every caller did. A digest like <code>sha256:../../.bashrc</code> would otherwise
+point outside the store. The pattern also refuses other hash algorithms
+(<code>DIGEST_PATTERN</code> allows <code>sha512:</code>), because we only compute sha256 and
+can’t check a file stored under any other name.</p>
 <p>Now the method that does the real work. Add it below <code>has</code>:</p>
 <pre><code class="language-ts">  // Stream `chunks` to disk, hashing and counting them on the way.
   // Returns the file's path, or throws if the bytes aren't what
@@ -476,6 +482,8 @@ refuses the others instead of storing them under a name it can’t check.</p>
   async put(expected: Descriptor, chunks: AsyncIterable&lt;Uint8Array&gt;): Promise&lt;string&gt; {
     const path = this.pathFor(expected.digest)
     const partial = `${path}.partial`
+    // Make sure &lt;root&gt;/sha256 exists. recursive: true is "mkdir -p":
+    // it creates missing parents and is fine if the folder is there.
     await mkdir(join(this.root, "sha256"), { recursive: true })
 
     const hash = createHash("sha256")
@@ -646,7 +654,8 @@ folder is empty. <code>readdir</code> lists a folder’s files, like <code>os.Re
 there are more bytes than promised”: <code>put(HELLO, chunksOf("hello", " and much more"))</code>
 rejects with <code>"is bigger than 5 bytes"</code>. “refuses a digest that isn’t
 sha256”: <code>store.pathFor("sha512:abcd")</code> throws
-<code>"unsupported digest sha512:abcd"</code> (this one isn’t async).</p>
+<code>"unsupported digest sha512:abcd"</code> (this one isn’t async), and so does
+<code>store.pathFor("sha256:../../.bashrc")</code>.</p>
 </blockquote>
 <p>Here it is:</p>
 <pre><code class="language-ts">  it("stops as soon as there are more bytes than promised", async () =&gt; {
@@ -659,6 +668,8 @@ sha256”: <code>store.pathFor("sha512:abcd")</code> throws
     const store = new ContentStore(root())
 
     expect(() =&gt; store.pathFor("sha512:abcd")).toThrow("unsupported digest sha512:abcd")
+    // A name that tries to climb out of the store's folder.
+    expect(() =&gt; store.pathFor("sha256:../../.bashrc")).toThrow("unsupported digest")
   })
 </code></pre>
 <pre><code>$ npm run check
@@ -1024,7 +1035,7 @@ straight to <code>tar</code>, with no shell to misread a space or a <code>;</cod
 in (a <em>callback</em>) instead of returning a Promise. <code>promisify</code> wraps one
 of those so you can <code>await</code> it. If <code>tar</code> exits with an error, the
 Promise rejects.</p>
-<p><code>mkdir(folder, { recursive: true })</code> is <code>mkdir -p</code>: it creates parent
+<p>As in the store, <code>mkdir(folder, { recursive: true })</code> is <code>mkdir -p</code>: it creates parent
 folders too, and doesn’t complain if the folder exists.</p>
 <p>Why is this a shortcut and not the real thing? Two reasons, both fixed
 in Chapter 9. First, layers can <em>delete</em> files from the layers below

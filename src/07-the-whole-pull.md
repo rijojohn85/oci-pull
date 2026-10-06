@@ -324,6 +324,9 @@ export class StoreError extends Error {
   }
 }
 
+// "sha256:" then 64 hex characters: the only digests the store accepts.
+const SHA256_DIGEST = /^sha256:[0-9a-f]{64}$/
+
 // A folder of files, each named after the sha256 of its own bytes.
 // Its one job: keep a file only if its bytes match its name.
 export class ContentStore {
@@ -335,8 +338,9 @@ export class ContentStore {
 
   // Where a blob lives: <root>/sha256/<hex>.
   pathFor(digest: string): string {
-    // Only sha256 is supported; anything else is refused, not guessed.
-    if (!digest.startsWith("sha256:")) {
+    // Only "sha256:" plus exactly 64 lowercase hex characters. Anything
+    // else (sha512, "../", a "/") is refused, so a name can't escape the folder.
+    if (!SHA256_DIGEST.test(digest)) {
       throw new StoreError(`unsupported digest ${digest}`)
     }
     return join(this.root, "sha256", digest.slice("sha256:".length))
@@ -360,10 +364,12 @@ and `path/filepath`. `node:fs/promises` holds the file functions that
 return Promises, so you can `await` them. `join` builds a path with the
 right separators, like `filepath.Join`.
 
-The digest's format was already checked by zod in Chapter 6, so by now
-it can't contain a `/` or `..`. But `DIGEST_PATTERN` allows other hash
-algorithms (`sha512:`), and we only compute sha256. So `pathFor`
-refuses the others instead of storing them under a name it can't check.
+The digest goes straight into a file path, so `pathFor` checks it
+itself. zod already checked it in Chapter 6, but the store can't know
+every caller did. A digest like `sha256:../../.bashrc` would otherwise
+point outside the store. The pattern also refuses other hash algorithms
+(`DIGEST_PATTERN` allows `sha512:`), because we only compute sha256 and
+can't check a file stored under any other name.
 
 Now the method that does the real work. Add it below `has`:
 
@@ -374,6 +380,8 @@ Now the method that does the real work. Add it below `has`:
   async put(expected: Descriptor, chunks: AsyncIterable<Uint8Array>): Promise<string> {
     const path = this.pathFor(expected.digest)
     const partial = `${path}.partial`
+    // Make sure <root>/sha256 exists. recursive: true is "mkdir -p":
+    // it creates missing parents and is fine if the folder is there.
     await mkdir(join(this.root, "sha256"), { recursive: true })
 
     const hash = createHash("sha256")
@@ -567,7 +575,8 @@ Two more checks, then run them.
 > there are more bytes than promised": `put(HELLO, chunksOf("hello", " and much more"))`
 > rejects with `"is bigger than 5 bytes"`. "refuses a digest that isn't
 > sha256": `store.pathFor("sha512:abcd")` throws
-> `"unsupported digest sha512:abcd"` (this one isn't async).
+> `"unsupported digest sha512:abcd"` (this one isn't async), and so does
+> `store.pathFor("sha256:../../.bashrc")`.
 
 Here it is:
 
@@ -582,6 +591,8 @@ Here it is:
     const store = new ContentStore(root())
 
     expect(() => store.pathFor("sha512:abcd")).toThrow("unsupported digest sha512:abcd")
+    // A name that tries to climb out of the store's folder.
+    expect(() => store.pathFor("sha256:../../.bashrc")).toThrow("unsupported digest")
   })
 ```
 
@@ -1036,7 +1047,7 @@ in (a *callback*) instead of returning a Promise. `promisify` wraps one
 of those so you can `await` it. If `tar` exits with an error, the
 Promise rejects.
 
-`mkdir(folder, { recursive: true })` is `mkdir -p`: it creates parent
+As in the store, `mkdir(folder, { recursive: true })` is `mkdir -p`: it creates parent
 folders too, and doesn't complain if the folder exists.
 
 Why is this a shortcut and not the real thing? Two reasons, both fixed

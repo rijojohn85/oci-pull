@@ -53,6 +53,21 @@ The book is built bottom-up, so every chapter must show where it fits:
   end to end, roughly. Later chapters replace a rough part with a good one
   and say which shortcut they remove.
 
+## Write it whole, then split it (user's choice, 2026-10-06; from Ch8 on)
+"Make it work, then make it right" (Fowler's *Refactoring*, ch. 1).
+- If a function we need already exists, use it. Otherwise write the new
+  logic inline, in the function that needs it.
+- Once it works, split out helpers *only when the split teaches
+  something*: a SOLID idea (name it at that line), testability, or code
+  needed a second time (DRY waits for the second use).
+- Test the outer function's behavior first; those tests must survive the
+  split unchanged. Add small helper tests after the split.
+- Split in small steps, one helper per step, and show the real check
+  output ("N tests still pass") after each.
+- Cap the inline function at about 40 lines. Longer: build it across a
+  few sections, then split at the end.
+- Don't do it every chapter; retyping code is tiring.
+
 ## Process
 - One chapter at a time. Write it, stop, user tries it, then next.
 - Check real interfaces before drafting (registry API, Node docs, zod,

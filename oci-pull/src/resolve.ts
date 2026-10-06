@@ -1,5 +1,7 @@
 
+import { sha256Digest } from "./digest.ts"
 import { type ImageManifest, ManifestError, parseManifest, pickPlatform, type Platform } from "./manifest.ts"
+import { DIGEST_PATTERN } from "./reference.ts"
 import type { RawManifest } from "./registry.ts"
 
 // All resolveImage needs from a registry is this one method. Asking for
@@ -24,6 +26,10 @@ export async function resolveImage(
   want: Platform,
 ): Promise<ResolvedImage> {
   const raw = await source.fetchManifest(repository, reference)
+  // Asked by digest? Then we know exactly which bytes to expect.
+  if (DIGEST_PATTERN.test(reference)) {
+    checkDigest(raw, reference)
+  }
   const first = parseManifest(raw.mediaType, raw.bytes)
   if (first.kind === "image") {
     // A single-platform image: nothing to pick.
@@ -33,9 +39,19 @@ export async function resolveImage(
   // An index: pick our platform, then fetch that entry by its digest.
   const entry = pickPlatform(first.index, want)
   const rawImage = await source.fetchManifest(repository, entry.digest)
+  checkDigest(rawImage, entry.digest)
   const second = parseManifest(rawImage.mediaType, rawImage.bytes)
   if (second.kind === "index") {
     throw new ManifestError(`${entry.digest} is another index, not an image`)
   }
   return { digest: entry.digest, manifest: second.manifest }
 }
+// Are these the bytes we asked for? A digest names exact bytes, so a
+// server can't swap in a different manifest under the same name.
+function checkDigest(raw: RawManifest, digest: string): void {
+  const actual = sha256Digest(raw.bytes)
+  if (actual !== digest) {
+    throw new ManifestError(`asked for ${digest}, got bytes for ${actual}`)
+  }
+}
+

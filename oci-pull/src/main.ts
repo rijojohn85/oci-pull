@@ -1,9 +1,14 @@
+import { join } from "path"
 import { AnonymousAuthenticator, AuthError } from "./auth.ts"
 import { FetchHttpClient } from "./http.ts"
 import { formatPlatform, hostPlatform, ManifestError, type Platform } from "./manifest.ts"
 import { InvalidReferenceError, parseReference, target } from "./reference.ts"
 import { RegistryClient, RegistryError, type ApiCheck } from "./registry.ts"
 import { resolveImage, type ResolvedImage } from "./resolve.ts"
+import { ContentStore, StoreError } from "./store.ts"
+import { homedir } from "os"
+import { downloadLayer } from "./pull.ts"
+import { unpackWithSystemTar } from "./unpack.ts"
 
 export function useage(): string {
   return "useage: oci-pull <image> <output-dir>"
@@ -31,20 +36,13 @@ function describeApiCheck(check: ApiCheck): string {
 // }
 // What we're about to pull: the platform, the manifest's digest, the
 // config, and one line per layer.
+// What we're about to pull: the platform, the manifest's digest, and
+// the config. Each layer gets its own line as it downloads.
 function describeImage(platform: Platform, resolved: ResolvedImage): string {
-  // Pull two fields out of the manifest into their own names.
-  const { config, layers } = resolved.manifest
-  // map() turns each layer into a line. Its second argument is the
-  // position (0, 1, ...), so +1 counts from 1 for people.
-  const layerLines = layers.map(
-    (layer, i) => `layer ${i + 1}/${layers.length}  ${layer.digest}  ${megabytes(layer.size)}`,
-  )
   return [
     `platform   ${formatPlatform(platform)}`,
     `manifest   ${resolved.digest ?? "(not sent)"}`,
-    `config     ${config.digest}`,
-    // ...layerLines puts each line in as its own item.
-    ...layerLines,
+    `config     ${resolved.manifest.config.digest}`,
   ].join("\n")
 }
 
@@ -83,9 +81,26 @@ export async function main(argv: string[]): Promise<number> {
     const resolved = await resolveImage(registry, ref.repository, target(ref), platform)
     console.log(describeImage(platform, resolved))
 
+    // Downloads go into a cache that outlives this run, so a layer that's
+    // already there is never downloaded twice.
+    const store = new ContentStore(join(homedir(), ".cache", "oci-pull"))
+    const { layers } = resolved.manifest
+    // ROUGH: one layer at a time. Chapter 8 downloads them all at once.
+    // entries() gives [position, item] pairs, like enumerate() in Python.
+    for (const [i, layer] of layers.entries()) {
+      const result = await downloadLayer(registry, store, ref.repository, layer)
+      console.log(`layer ${i + 1}/${layers.length}  ${layer.digest}  ${megabytes(layer.size)}  ${result}`)
+    }
+
+    // Unpack in order: each layer goes on top of the ones before it.
+    for (const layer of layers) {
+      await unpackWithSystemTar(store.pathFor(layer.digest), outputDir)
+    }
+    console.log(`unpacked   ${outputDir}`)
+
     return 0
   } catch (err) {
-    if (err instanceof InvalidReferenceError || err instanceof RegistryError || err instanceof AuthError || err instanceof ManifestError) {
+    if (err instanceof InvalidReferenceError || err instanceof RegistryError || err instanceof AuthError || err instanceof ManifestError || err instanceof StoreError) {
       console.error(err.message)
       return 1
     }

@@ -27,7 +27,8 @@ export const ALPINE_INDEX = {
   ],
 }
 
-// The image manifest the amd64 entry points to.
+// The image manifest the amd64 entry points to: every field, in the
+// server's order, so its bytes (see bytesOf) are exactly the real ones.
 export const ALPINE_AMD64 = {
   schemaVersion: 2,
   mediaType: OCI_IMAGE,
@@ -43,10 +44,21 @@ export const ALPINE_AMD64 = {
       size: 3630321,
     },
   ],
-  annotations: { "org.opencontainers.image.version": "3.20.10" },
+  annotations: {
+    "com.docker.official-images.bashbrew.arch": "amd64",
+    "org.opencontainers.image.base.name": "scratch",
+    "org.opencontainers.image.created": "2026-04-16T23:53:23Z",
+    "org.opencontainers.image.revision": "0db70ae354ee747109ce0b9a0cfbcd3c907bc822",
+    "org.opencontainers.image.source":
+      "https://github.com/alpinelinux/docker-alpine.git#0db70ae354ee747109ce0b9a0cfbcd3c907bc822:x86_64",
+    "org.opencontainers.image.url": "https://hub.docker.com/_/alpine",
+    "org.opencontainers.image.version": "3.20.10",
+  },
 }
 
 // A value as the bytes a server would send: JSON text, UTF-8 encoded.
+// Docker Hub indents with two spaces; the `null, 2` does the same, so
+// ALPINE_AMD64 comes out byte for byte as Docker Hub sent it.
 export function bytesOf(value: unknown): Uint8Array {
-  return new TextEncoder().encode(JSON.stringify(value))
+  return new TextEncoder().encode(JSON.stringify(value, null, 2))
 }
